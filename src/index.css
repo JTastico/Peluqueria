@@ -1,0 +1,117 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* StylePro Manager Design System - Colores elegantes y profesionales */
+
+@layer base {
+  :root {
+    --background: 250 100% 98%;
+    --foreground: 250 15% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 250 15% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 250 15% 15%;
+
+    --primary: 260 80% 60%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 250 30% 96%;
+    --secondary-foreground: 250 15% 25%;
+
+    --muted: 250 30% 96%;
+    --muted-foreground: 250 10% 50%;
+
+    --accent: 250 100% 95%;
+    --accent-foreground: 250 15% 25%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 250 30% 90%;
+    --input: 250 30% 90%;
+    --ring: 260 80% 60%;
+
+    --radius: 0.75rem;
+
+    --sidebar-background: 260 40% 8%;
+    --sidebar-foreground: 250 20% 85%;
+    --sidebar-primary: 260 80% 60%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 260 30% 15%;
+    --sidebar-accent-foreground: 250 20% 85%;
+    --sidebar-border: 260 20% 20%;
+    --sidebar-ring: 260 80% 60%;
+  }
+
+  .dark {
+    --background: 250 20% 8%;
+    --foreground: 250 20% 95%;
+
+    --card: 250 20% 10%;
+    --card-foreground: 250 20% 95%;
+
+    --popover: 250 20% 10%;
+    --popover-foreground: 250 20% 95%;
+
+    --primary: 260 80% 60%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 250 20% 15%;
+    --secondary-foreground: 250 20% 85%;
+
+    --muted: 250 20% 15%;
+    --muted-foreground: 250 10% 60%;
+
+    --accent: 250 20% 15%;
+    --accent-foreground: 250 20% 85%;
+
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 250 20% 20%;
+    --input: 250 20% 20%;
+    --ring: 260 80% 60%;
+
+    --sidebar-background: 260 40% 8%;
+    --sidebar-foreground: 250 20% 85%;
+    --sidebar-primary: 260 80% 60%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 260 30% 15%;
+    --sidebar-accent-foreground: 250 20% 85%;
+    --sidebar-border: 260 20% 20%;
+    --sidebar-ring: 260 80% 60%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* Scrollbar personalizado */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--muted));
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}
