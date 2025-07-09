@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { localesData, Local } from "@/data/locales-data";
+import { ClientIntake } from "@/components/ClientIntake"; // <<<--- 1. IMPORTACIÓN AGREGADA
 
 const initialNewLocalState = {
   nombre: "",
@@ -95,6 +96,7 @@ const Locales = () => {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-foreground mb-2">Gestión de Locales</h1>
           <p className="text-muted-foreground">Administra y monitorea todos tus locales desde un solo lugar</p>
+                        <ClientIntake />
         </div>
 
         {userRole === 'admin' && (
@@ -149,6 +151,7 @@ const Locales = () => {
                   </Button>
                 </DialogContent>
               </Dialog>
+
             </div>
           </div>
         )}

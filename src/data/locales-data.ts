@@ -1,7 +1,7 @@
 // Define la estructura de un local
 export interface Local {
   id: number;
-  type: "peluqueria" | "spa";
+  type: "peluqueria" | "spa" | "barberia"; // He añadido "barberia" al tipo
   nombre: string;
   direccion: string;
   telefono: string;
@@ -11,16 +11,18 @@ export interface Local {
   clientesActivos: number;
   imagen: string;
   estado: "Activo" | "Inactivo";
-  // Credenciales específicas para este local
   username: string;
   password: string;
+  // --- CAMPOS AÑADIDOS ---
+  servicios: string[];
+  trabajadores: string[];
 }
 
-// Datos de todos los locales
+// Datos de todos los locales actualizados con tu información
 export const localesData: Local[] = [
   {
     id: 1,
-    type: "peluqueria",
+    type: "barberia", // Tipo actualizado
     nombre: "Barberia Koko",
     direccion: "Av. Principal 123, Centro",
     telefono: "+52 55 1234-5678",
@@ -31,7 +33,9 @@ export const localesData: Local[] = [
     imagen: "https://images.unsplash.com/photo-1560066984-138dadb4c035?w=300&h=200&fit=crop",
     estado: "Activo",
     username: "barberia",
-    password: "barberia"
+    password: "barberia",
+    servicios: ["Corte Clásico", "Afeitado con Toalla Caliente", "Diseño de Barba", "Tratamiento Capilar"],
+    trabajadores: ["Javier Paredes", "Roberto Silva", "Miguel Torres"]
   },
   {
     id: 2,
@@ -46,7 +50,9 @@ export const localesData: Local[] = [
     imagen: "https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=300&h=200&fit=crop",
     estado: "Activo",
     username: "peluqueria",
-    password: "peluqueria"
+    password: "peluqueria",
+    servicios: ["Corte de Dama", "Tinte y Mechas", "Peinado para Eventos", "Manicura y Pedicura"],
+    trabajadores: ["Ana Rodríguez", "Luisa Fernandez", "Verónica Solis"]
   },
   {
     id: 3,
@@ -61,7 +67,9 @@ export const localesData: Local[] = [
     imagen: "https://images.unsplash.com/photo-1521590832167-7bcbfaa6381f?w=300&h=200&fit=crop",
     estado: "Activo",
     username: "spa",
-    password: "spa"
+    password: "spa",
+    servicios: ["Masaje Relajante", "Limpieza Facial Profunda", "Exfoliación Corporal", "Aromaterapia"],
+    trabajadores: ["Laura Jiménez", "Marta Rivas", "Carlos Mendoza"]
   }
 ];
 
