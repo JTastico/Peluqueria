@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { MapPin, Phone, Clock, TrendingUp, Users, Plus, Edit, Trash2, Search, Filter } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,7 +10,6 @@ import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { localesData, Local } from "@/data/locales-data";
 
-// Estado inicial para un nuevo local vacío
 const initialNewLocalState = {
   nombre: "",
   direccion: "",
@@ -20,6 +20,7 @@ const initialNewLocalState = {
 
 const Locales = () => {
   const { userRole, localId } = useAuth();
+  const navigate = useNavigate();
 
   const getInitialData = () => {
     if (userRole === 'admin') return localesData;
@@ -33,8 +34,6 @@ const Locales = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [editingLocal, setEditingLocal] = useState<any>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-
-  // Estado para manejar los datos del formulario del nuevo local
   const [newLocalData, setNewLocalData] = useState(initialNewLocalState);
 
   const filteredLocales = locales.filter(local =>
@@ -45,7 +44,6 @@ const Locales = () => {
   const handleEdit = (local: any) => {
     setEditingLocal(local);
     toast.success(`Editando ${local.nombre}`);
-    // Aquí iría la lógica para abrir un diálogo de edición
   };
 
   const handleDelete = (idToDelete: number) => {
@@ -53,46 +51,42 @@ const Locales = () => {
     toast.success("Local eliminado correctamente");
   };
 
-  // Función para manejar el cambio en los inputs del formulario
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { id, value } = e.target;
     setNewLocalData(prevData => ({ ...prevData, [id]: value }));
   };
 
-  // Función para guardar el nuevo local
   const handleSaveLocal = () => {
     const { nombre, direccion, telefono, username, password } = newLocalData;
-
-    // Validación simple
     if (!nombre || !direccion || !telefono || !username || !password) {
       toast.error("Todos los campos son obligatorios.");
       return;
     }
 
     const newLocal: Local = {
-      id: Date.now(), // ID único basado en el timestamp
-      type: "peluqueria", // Tipo por defecto, se podría añadir un selector
+      id: Date.now(),
+      type: "peluqueria",
       nombre,
       direccion,
       telefono,
-      horario: "Lun-Sab 9:00-20:00", // Valor por defecto
+      horario: "Lun-Sab 9:00-20:00",
       peluqueros: 0,
       ingresosMes: 0,
       clientesActivos: 0,
-      imagen: `https://source.unsplash.com/random/300x200?barbershop,${nombre}`, // Imagen aleatoria
+      imagen: `https://source.unsplash.com/random/300x200?barbershop,${nombre}`,
       estado: "Activo",
       username,
       password
     };
 
-    // Añadimos el nuevo local a la lista
     setLocales(prevLocales => [...prevLocales, newLocal]);
-    
     toast.success(`El local "${nombre}" ha sido agregado exitosamente.`);
-    
-    // Limpiamos el formulario y cerramos el diálogo
     setNewLocalData(initialNewLocalState);
     setIsDialogOpen(false);
+  };
+
+  const handleNavigate = (id: number) => {
+    navigate(`/locales/${id}`);
   };
 
   return (
@@ -161,44 +155,51 @@ const Locales = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredLocales.map((local, index) => (
-            <Card key={local.id} className="group overflow-hidden hover:shadow-lg hover-scale transition-all duration-300 border-0 shadow-md animate-fade-in" style={{ animationDelay: `${index * 100}ms` }}>
-              <div className="relative h-48">
-                <img src={local.imagen} alt={local.nombre} className="w-full h-full object-cover" />
-                {userRole === 'admin' && (
-                   <div className="absolute top-4 left-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button size="sm" variant="secondary" className="h-8 w-8 p-0" onClick={() => handleEdit(local)}><Edit className="h-4 w-4" /></Button>
-                    <Button size="sm" variant="destructive" className="h-8 w-8 p-0" onClick={() => handleDelete(local.id)}><Trash2 className="h-4 w-4" /></Button>
-                  </div>
-                )}
-              </div>
-              <CardHeader><CardTitle>{local.nombre}</CardTitle></CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center gap-2 text-muted-foreground"><MapPin className="h-4 w-4" /><span>{local.direccion}</span></div>
-                  <div className="flex items-center gap-2 text-muted-foreground"><Phone className="h-4 w-4" /><span>{local.telefono}</span></div>
-                  <div className="flex items-center gap-2 text-muted-foreground"><Clock className="h-4 w-4" /><span>{local.horario}</span></div>
+            <div key={local.id} onClick={() => handleNavigate(local.id)} className="cursor-pointer">
+              <Card className="group overflow-hidden hover:shadow-lg hover-scale transition-all duration-300 border-0 shadow-md animate-fade-in" style={{ animationDelay: `${index * 100}ms` }}>
+                <div className="relative h-48">
+                  <img src={local.imagen} alt={local.nombre} className="w-full h-full object-cover" />
+                  {userRole === 'admin' && (
+                    <div className="absolute top-4 left-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Button size="sm" variant="secondary" className="h-8 w-8 p-0" onClick={(e) => { e.stopPropagation(); handleEdit(local); }}>
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button size="sm" variant="destructive" className="h-8 w-8 p-0" onClick={(e) => { e.stopPropagation(); handleDelete(local.id); }}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
                 </div>
-                <div className="grid grid-cols-3 gap-3 pt-4 border-t">
-                  <div className="text-center">
-                    <div className="flex items-center justify-center gap-1 text-stylepro-gold-600 mb-1"><TrendingUp className="h-4 w-4" /></div>
-                    <p className="text-lg font-semibold">S/{local.ingresosMes.toLocaleString()}</p>
-                    <p className="text-xs text-muted-foreground">Ingresos/Mes</p>
+                <CardHeader><CardTitle>{local.nombre}</CardTitle></CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2 text-sm">
+                    <div className="flex items-center gap-2 text-muted-foreground"><MapPin className="h-4 w-4" /><span>{local.direccion}</span></div>
+                    <div className="flex items-center gap-2 text-muted-foreground"><Phone className="h-4 w-4" /><span>{local.telefono}</span></div>
+                    <div className="flex items-center gap-2 text-muted-foreground"><Clock className="h-4 w-4" /><span>{local.horario}</span></div>
                   </div>
-                  <div className="text-center">
-                    <div className="flex items-center justify-center gap-1 text-stylepro-lavender-600 mb-1"><Users className="h-4 w-4" /></div>
-                    <p className="text-lg font-semibold">{local.peluqueros}</p>
-                    <p className="text-xs text-muted-foreground">Peluqueros</p>
+                  <div className="grid grid-cols-3 gap-3 pt-4 border-t">
+                    <div className="text-center">
+                      <div className="flex items-center justify-center gap-1 text-stylepro-gold-600 mb-1"><TrendingUp className="h-4 w-4" /></div>
+                      <p className="text-lg font-semibold">S/{local.ingresosMes.toLocaleString()}</p>
+                      <p className="text-xs text-muted-foreground">Ingresos/Mes</p>
+                    </div>
+                    <div className="text-center">
+                      <div className="flex items-center justify-center gap-1 text-stylepro-lavender-600 mb-1"><Users className="h-4 w-4" /></div>
+                      <p className="text-lg font-semibold">{local.peluqueros}</p>
+                      <p className="text-xs text-muted-foreground">Peluqueros</p>
+                    </div>
+                    <div className="text-center">
+                      <div className="flex items-center justify-center gap-1 text-stylepro-blue-600 mb-1"><Users className="h-4 w-4" /></div>
+                      <p className="text-lg font-semibold">{local.clientesActivos}</p>
+                      <p className="text-xs text-muted-foreground">Clientes</p>
+                    </div>
                   </div>
-                  <div className="text-center">
-                    <div className="flex items-center justify-center gap-1 text-stylepro-blue-600 mb-1"><Users className="h-4 w-4" /></div>
-                    <p className="text-lg font-semibold">{local.clientesActivos}</p>
-                    <p className="text-xs text-muted-foreground">Clientes</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </div>
           ))}
         </div>
+
         {filteredLocales.length === 0 && (
           <div className="text-center py-16">
             <p className="text-muted-foreground">No se encontraron locales.</p>

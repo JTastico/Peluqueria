@@ -13,9 +13,10 @@ import NotFound from "@/pages/NotFound";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "./ui/button";
 import { LogOut } from "lucide-react";
+import LocalDetail from "@/pages/LocalDetail"; // IMPORTAMOS LA NUEVA PÁGINA
 
 export const MainAppLayout = () => {
-  const { userRole, username, logout } = useAuth(); // Usamos 'username' en lugar de 'userRole' para el display
+  const { userRole, username, logout } = useAuth(); 
   
   const userInitials = username ? username.substring(0, 2).toUpperCase() : '??';
 
@@ -47,6 +48,8 @@ export const MainAppLayout = () => {
               <Route path="/" element={<Navigate to="/locales" replace />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/locales" element={<Locales />} />
+              {/* RUTA NUEVA Y DINÁMICA */}
+              <Route path="/locales/:localId" element={<LocalDetail />} /> 
               <Route path="/peluqueros" element={<Peluqueros />} />
               <Route path="/clientes" element={<Clientes />} />
               <Route path="/servicios" element={<Servicios />} />

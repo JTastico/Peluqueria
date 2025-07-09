@@ -124,9 +124,9 @@ const Peluqueros = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todos los locales</SelectItem>
-                <SelectItem value="Centro">StylePro Centro</SelectItem>
-                <SelectItem value="Norte">StylePro Norte</SelectItem>
-                <SelectItem value="Sur">StylePro Sur</SelectItem>
+                <SelectItem value="Centro">Spa</SelectItem>
+                <SelectItem value="Norte">Peluqueria</SelectItem>
+                <SelectItem value="Sur">Barberia</SelectItem>
               </SelectContent>
             </Select>
           </div>
