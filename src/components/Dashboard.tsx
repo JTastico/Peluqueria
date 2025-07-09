@@ -18,7 +18,7 @@ export function Dashboard() {
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-foreground mb-2">
-          Dashboard StylePro Manager
+          Dashboard Koko
         </h1>
         <p className="text-muted-foreground">
           Gestiona tus peluquerías de forma inteligente y profesional
