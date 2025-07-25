@@ -6,7 +6,7 @@ exports.getAllServicios = async (req, res, next) => {
     const { local_id } = req.query; // Obtener local_id de los query params (ej. ?local_id=1)
     try {
         const pool = getDb();
-        let query = 'SELECT * FROM servicios';
+        let query = 'SELECT id, nombre, categoria, precio, duracion, descripcion, local_id FROM servicios'; // Seleccionar solo columnas existentes
         const params = [];
 
         if (local_id) {
@@ -17,10 +17,8 @@ exports.getAllServicios = async (req, res, next) => {
         const [rows] = await pool.query(query, params);
         const servicios = rows.map(row => ({
             ...row,
-            precio: parseFloat(row.precio),
-            popularidad: parseInt(row.popularidad, 10),
-            ingresosMes: parseFloat(row.ingresosMes),
-            clientesMes: parseInt(row.clientesMes, 10)
+            precio: parseFloat(row.precio) // Convertir solo precio
+            // popularidad, ingresosMes, clientesMes ya no se procesan aquí
         }));
         res.json(servicios);
     } catch (err) {
@@ -30,7 +28,8 @@ exports.getAllServicios = async (req, res, next) => {
 
 // Crear un nuevo servicio
 exports.createServicio = async (req, res, next) => {
-    const { nombre, categoria, precio, duracion, popularidad, ingresosMes, clientesMes, descripcion, local_id } = req.body;
+    // CAMBIO CLAVE AQUÍ: Quitar popularidad, ingresosMes, clientesMes del body
+    const { nombre, categoria, precio, duracion, descripcion, local_id } = req.body;
 
     if (!nombre || !categoria || !precio || !local_id) {
         return res.status(400).json({ message: 'Nombre, categoría, precio y ID del local son obligatorios para el servicio.' });
@@ -39,16 +38,14 @@ exports.createServicio = async (req, res, next) => {
     try {
         const pool = getDb();
         const [result] = await pool.query(
-            `INSERT INTO servicios (nombre, categoria, precio, duracion, popularidad, ingresosMes, clientesMes, descripcion, local_id)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            // CAMBIO CLAVE AQUÍ: Las columnas deben coincidir con la tabla (sin popularidad, ingresosMes, clientesMes)
+            `INSERT INTO servicios (nombre, categoria, precio, duracion, descripcion, local_id)
+             VALUES (?, ?, ?, ?, ?, ?)`, // ¡AHORA SON 6 QUESTION MARKS!
             [
                 nombre,
                 categoria,
-                precio, // Se espera como número del frontend
+                precio,
                 duracion || null,
-                popularidad || 0,
-                ingresosMes || 0,
-                clientesMes || 0,
                 descripcion || null,
                 local_id
             ]
@@ -58,10 +55,8 @@ exports.createServicio = async (req, res, next) => {
         const [newServicioRows] = await pool.query('SELECT * FROM servicios WHERE id = ?', [newServicioId]);
         const newServicio = {
             ...newServicioRows[0],
-            precio: parseFloat(newServicioRows[0].precio),
-            popularidad: parseInt(newServicioRows[0].popularidad, 10),
-            ingresosMes: parseFloat(newServicioRows[0].ingresosMes),
-            clientesMes: parseInt(newServicioRows[0].clientesMes, 10)
+            precio: parseFloat(newServicioRows[0].precio)
+            // popularidad, ingresosMes, clientesMes ya no se procesan aquí
         };
         res.status(201).json(newServicio);
 
@@ -70,7 +65,7 @@ exports.createServicio = async (req, res, next) => {
     }
 };
 
-// Eliminar un servicio
+// Eliminar un servicio (sin cambios)
 exports.deleteServicio = async (req, res, next) => {
     const { id } = req.params;
     try {
@@ -87,21 +82,20 @@ exports.deleteServicio = async (req, res, next) => {
     }
 };
 
-// (Opcional) Obtener servicio por ID si es necesario
+// Obtener servicio por ID si es necesario (sin cambios en funcionalidad, solo columnas seleccionadas)
 exports.getServicioById = async (req, res, next) => {
     const { id } = req.params;
     try {
         const pool = getDb();
-        const [rows] = await pool.query('SELECT * FROM servicios WHERE id = ?', [id]);
+        // Seleccionar solo columnas existentes
+        const [rows] = await pool.query('SELECT id, nombre, categoria, precio, duracion, descripcion, local_id FROM servicios WHERE id = ?', [id]);
         if (rows.length === 0) {
             return res.status(404).json({ message: 'Servicio no encontrado.' });
         }
         const servicio = {
             ...rows[0],
-            precio: parseFloat(rows[0].precio),
-            popularidad: parseInt(rows[0].popularidad, 10),
-            ingresosMes: parseFloat(rows[0].ingresosMes),
-            clientesMes: parseInt(rows[0].clientesMes, 10)
+            precio: parseFloat(rows[0].precio)
+            // popularidad, ingresosMes, clientesMes ya no se procesan aquí
         };
         res.json(servicio);
     } catch (err) {
