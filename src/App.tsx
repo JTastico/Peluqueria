@@ -20,6 +20,7 @@ const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
   return children;
 };
 
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -33,13 +34,13 @@ const App = () => (
             <Route path="/login" element={<LoginPage />} />
 
             {/* Rutas Privadas: Requieren iniciar sesión */}
-            <Route 
+            <Route
               path="/*"
               element={
                 <ProtectedRoute>
                   <MainAppLayout />
                 </ProtectedRoute>
-              } 
+              }
             />
           </Routes>
         </AuthProvider>

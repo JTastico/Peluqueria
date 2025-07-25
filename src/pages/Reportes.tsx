@@ -33,7 +33,7 @@ const serviciosData = [
 ];
 
 const localesData = [
-  { local: 'Centro', ingresos: 85000, clientes: 234, crecimiento: 12 },
+  { local: 'Centro', ingresos: 825000, clientes: 234, crecimiento: 12 },
   { local: 'Norte', ingresos: 92000, clientes: 267, crecimiento: 8 },
   { local: 'Sur', ingresos: 67000, clientes: 178, crecimiento: 15 }
 ];

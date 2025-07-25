@@ -29,12 +29,13 @@ export function LoginPage() {
       const data = await response.json();
 
       if (response.ok) {
-        // Si la respuesta es exitosa, llama a la función login del hook de autenticación
+        // Si la respuesta es exitosa, llama a la función `login` de tu hook `useAuth`
+        // Asegúrate de que `login` pueda manejar `role` y `local_id`
         login(data.user.username, data.user.role, data.user.local_id);
         toast.success(`Bienvenido, ${data.user.username}!`);
         navigate('/'); // Redirige al dashboard o la ruta principal
       } else {
-        // Si el login falla, muestra el mensaje de error del backend
+        // Si hay un error en la respuesta del servidor
         toast.error('Credenciales incorrectas', {
           description: data.message || 'Por favor, verifica tu usuario y contraseña.',
         });
@@ -56,7 +57,7 @@ export function LoginPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleLogin}> {/* Modificado para llamar a handleLogin */}
+          <form onSubmit={handleLogin}>
             <div className="grid gap-4">
               <div className="grid gap-2">
                 <Label htmlFor="username">Usuario</Label>

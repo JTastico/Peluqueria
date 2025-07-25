@@ -1,4 +1,6 @@
-import { useState, useMemo } from "react";
+// src/components/ClientIntake.tsx
+
+import { useState, useMemo, useEffect } from "react";
 import {
   Drawer,
   DrawerClose,
@@ -23,30 +25,93 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
 import { UserPlus } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { localesData } from "@/data/locales-data";
+// No longer importing localesData from "@/data/locales-data";
+
+// Define la interfaz Local para los datos que vienen del backend
+interface Local {
+  id: number;
+  type: "peluqueria" | "spa" | "barberia";
+  nombre: string;
+  direccion: string;
+  telefono: string;
+  horario: string;
+  peluqueros: number;
+  ingresosMes: number;
+  clientesActivos: number;
+  imagen: string;
+  estado: "Activo" | "Inactivo";
+  username: string;
+  password: string; // En una app real, no se debería exponer la contraseña
+  servicios: string[]; // Viene como JSON string, el backend lo parsea
+  trabajadores: string[]; // Viene como JSON string, el backend lo parsear
+}
 
 export function ClientIntake() {
-  const { userRole, localId } = useAuth();
+  const { userRole, localId } = useAuth(); // localId es string | null
   
   const [servicio, setServicio] = useState("");
   const [trabajador, setTrabajador] = useState("");
   const [tipoPago, setTipoPago] = useState("efectivo");
   const [reseña, setReseña] = useState("");
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [fetchedLocalesData, setFetchedLocalesData] = useState<Local[] | Local | null>(null);
+  const [isLoadingLocales, setIsLoadingLocales] = useState(true);
+  const [errorLocales, setErrorLocales] = useState<string | null>(null);
 
-  // Lógica para filtrar datos dinámicamente según el usuario
+  useEffect(() => {
+    const fetchLocales = async () => {
+      setIsLoadingLocales(true);
+      setErrorLocales(null);
+      try {
+        let url = '';
+        if (userRole === 'admin') {
+          url = 'http://localhost:3001/api/locales'; // Obtener todos los locales para el admin
+        } else if (userRole === 'encargado' && localId) {
+          url = `http://localhost:3001/api/locales/${localId}`; // Obtener solo el local del encargado
+        } else {
+          // No hay rol o localId válido para buscar
+          setFetchedLocalesData(null);
+          setIsLoadingLocales(false);
+          return;
+        }
+
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(`Error al cargar datos de locales: ${response.statusText}`);
+        }
+        const data = await response.json();
+        setFetchedLocalesData(data);
+      } catch (err: any) {
+        console.error("Error al obtener datos de locales:", err);
+        setErrorLocales("No se pudieron cargar los datos de locales. Inténtalo de nuevo.");
+        toast.error("Error de carga", {
+            description: "No se pudieron obtener los servicios y trabajadores del servidor."
+        });
+      } finally {
+        setIsLoadingLocales(false);
+      }
+    };
+
+    fetchLocales();
+  }, [userRole, localId]); // Dependencias para re-ejecutar si cambian el rol o el ID del local
+
+  // Lógica para filtrar datos dinámicamente según el usuario y los datos fetched
   const { availableServices, availableWorkers } = useMemo(() => {
-    // Si es admin, puede ver todo
+    if (isLoadingLocales || errorLocales || !fetchedLocalesData) {
+        return { availableServices: [], availableWorkers: [] }; // Vacío mientras carga o si hay error
+    }
+
     if (userRole === 'admin') {
-      const allServices = [...new Set(localesData.flatMap(local => local.servicios))];
-      const allWorkers = [...new Set(localesData.flatMap(local => local.trabajadores))];
+      const allLocales = fetchedLocalesData as Local[];
+      const allServices = [...new Set(allLocales.flatMap(local => local.servicios))];
+      const allWorkers = [...new Set(allLocales.flatMap(local => local.trabajadores))];
       return { availableServices: allServices, availableWorkers: allWorkers };
     }
     
-    // Si es un usuario de un local, filtramos por su ID
-    if (userRole === 'local' && localId) {
-      const currentLocal = localesData.find(local => local.id === parseInt(localId, 10));
-      if (currentLocal) {
+    // Si es un encargado de local
+    if (userRole === 'encargado' && localId) {
+      const currentLocal = fetchedLocalesData as Local; // Debería ser un solo objeto Local
+      if (currentLocal && currentLocal.id === parseInt(localId, 10)) {
         return {
           availableServices: currentLocal.servicios,
           availableWorkers: currentLocal.trabajadores
@@ -54,9 +119,9 @@ export function ClientIntake() {
       }
     }
     
-    // Por defecto, listas vacías
+    // Por defecto, listas vacías si no se cumple ninguna condición
     return { availableServices: [], availableWorkers: [] };
-  }, [userRole, localId]);
+  }, [userRole, localId, fetchedLocalesData, isLoadingLocales, errorLocales]); // Dependencias actualizadas
 
   const handleRegister = () => {
     if (!servicio) {
@@ -100,7 +165,11 @@ export function ClientIntake() {
                           <SelectValue placeholder="Seleccione un servicio..." />
                       </SelectTrigger>
                       <SelectContent>
-                          {availableServices.length > 0 ? (
+                          {isLoadingLocales ? (
+                            <SelectItem value="loading" disabled>Cargando servicios...</SelectItem>
+                          ) : errorLocales ? (
+                            <SelectItem value="error" disabled>Error al cargar</SelectItem>
+                          ) : availableServices.length > 0 ? (
                             availableServices.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)
                           ) : (
                             <SelectItem value="none" disabled>No hay servicios disponibles</SelectItem>
@@ -117,7 +186,11 @@ export function ClientIntake() {
                       </SelectTrigger>
                       <SelectContent>
                           <SelectItem value="any">Asignar trabajador libre</SelectItem>
-                          {availableWorkers.length > 0 ? (
+                          {isLoadingLocales ? (
+                            <SelectItem value="loading" disabled>Cargando trabajadores...</SelectItem>
+                          ) : errorLocales ? (
+                            <SelectItem value="error" disabled>Error al cargar</SelectItem>
+                          ) : availableWorkers.length > 0 ? (
                             availableWorkers.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)
                           ) : (
                             <SelectItem value="none" disabled>No hay trabajadores disponibles</SelectItem>

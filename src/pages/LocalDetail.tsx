@@ -1,7 +1,7 @@
-import { useState, useMemo } from 'react';
+// src/pages/LocalDetail.tsx
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { localesData } from '@/data/locales-data';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, DollarSign, Users, Scissors, TrendingUp, Calendar as CalendarIcon, Trophy, Sparkles } from 'lucide-react';
@@ -11,6 +11,10 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { format, startOfWeek, endOfWeek, getMonth, setYear } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { toast } from 'sonner';
 
 // --- Componentes internos para los selectores ---
 const MonthPicker = ({ onSelect }: { onSelect: (date: Date) => void }) => {
@@ -44,31 +48,126 @@ type TimeRange = 'day' | 'week' | 'month' | 'year';
 
 const COLORS = ['#8B5CF6', '#3B82F6', '#F59E0B', '#10B981'];
 
+// Define la interfaz para Local (debe coincidir con la de tu DB)
+interface Local {
+  id: number;
+  type: "peluqueria" | "spa" | "barberia";
+  nombre: string;
+  direccion: string;
+  telefono: string;
+  horario: string;
+  peluqueros: number;
+  ingresosMes: number;
+  clientesActivos: number;
+  imagen: string;
+  estado: "Activo" | "Inactivo";
+  username: string; // Para referencia, no para mostrar
+  password: string; // Para referencia, no para mostrar
+  servicios: string[];
+  trabajadores: string[];
+}
+
+
 const LocalDetail = () => {
-  const { localId } = useParams();
+  // CAMBIO CLAVE AQUÍ: Usar 'localId' para que coincida con la ruta
+  const { localId } = useParams<{ localId: string }>();
   const navigate = useNavigate();
-  const { userRole, localId: authLocalId } = useAuth();
-  
+  const { userRole, localId: authLocalId } = useAuth(); // Renombramos para evitar conflicto de nombres
+
+  const [local, setLocal] = useState<Local | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   const [timeRange, setTimeRange] = useState<TimeRange>('month');
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
-  const local = useMemo(() => localesData.find(l => l.id.toString() === localId), [localId]);
+  useEffect(() => {
+    const fetchLocalDetail = async () => {
+      // CAMBIO CLAVE AQUÍ: Usar 'localId' para la comprobación
+      if (!localId) {
+        setError("ID de local no proporcionado.");
+        setLoading(false);
+        return;
+      }
 
+      try {
+        setLoading(true);
+        setError(null);
+        // CAMBIO CLAVE AQUÍ: Usar 'localId' en la URL de fetch
+        const response = await fetch(`http://localhost:3001/api/locales/${localId}`);
+        if (!response.ok) {
+          if (response.status === 404) {
+            throw new Error("Local no encontrado.");
+          }
+          throw new Error(`Error al cargar los detalles del local: ${response.statusText}`);
+        }
+        const data: Local = await response.json();
+
+        // Lógica de autorización: El encargado solo ve su propio local
+        // CAMBIO CLAVE AQUÍ: Usar 'localId' en la comprobación
+        if (userRole === 'encargado' && data.id !== parseInt(authLocalId || '0')) {
+          setError("No tienes permiso para ver este local.");
+          setLocal(null); // No mostrar datos si no hay permiso
+          toast.error("Acceso denegado", {
+            description: "No tienes permiso para ver los detalles de este local."
+          });
+          // Opcional: Redirigir al local del encargado si lo tiene
+          if (authLocalId) {
+            navigate(`/locales/${authLocalId}`);
+          } else {
+            navigate('/locales'); // Redirigir a la lista de locales
+          }
+          return;
+        }
+
+        setLocal(data);
+      } catch (err: any) {
+        console.error("Error fetching local details:", err);
+        setError(err.message || "Error al cargar los detalles del local.");
+        toast.error("Error al cargar detalles del local", {
+          description: err.message || "No se pudieron obtener los datos del local."
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    // CAMBIO CLAVE AQUÍ: Asegúrate de que localId sea una dependencia
+    fetchLocalDetail();
+  }, [localId, userRole, authLocalId, navigate]); // Dependencias del useEffect
+
+  // Usamos useMemo para generar datos simulados basados en el local fetched
   const { chartData, metrics } = useMemo(() => {
-    // Lógica para generar datos simulados
+    // Si no hay local o está cargando, devuelve datos vacíos o de carga.
+    if (!local || loading) {
+        return {
+            chartData: { tendencia: [], distribucion: [] },
+            metrics: { income: 0, services: 0, clients: 0, topWorkerName: 'Cargando...', topWorkerServices: 0, topServiceName: 'Cargando...', topServiceCount: 0 }
+        };
+    }
+
     const generateData = (factor: number, count: number, labelPrefix: string) => {
-        const localInfo = localesData.find(l => l.id.toString() === localId) || localesData[0];
-        
+        // Usar los servicios y trabajadores REALES del local
+        const currentLocalServices = local.servicios || [];
+        const currentLocalWorkers = local.trabajadores || [];
+
         const trend = Array.from({ length: count }, (_, i) => ({
             name: `${labelPrefix}${i + 1}`,
-            Ingresos: Math.floor(Math.random() * 800 * factor) + 200 * factor * (parseInt(localId) || 1),
+            Ingresos: Math.floor(Math.random() * 800 * factor) + 200 * factor, // Basado en el local actual
         }));
 
         const totalIncome = trend.reduce((sum, item) => sum + item.Ingresos, 0);
         const totalServices = Math.floor(totalIncome / (40 * factor + 10));
         
-        const serviceDistribution = (localInfo.servicios || []).map(s => ({ name: s, value: Math.floor(Math.random() * totalServices) }));
-        const workerDistribution = (localInfo.trabajadores || []).map(w => ({ name: w, value: Math.floor(Math.random() * totalServices) }));
+        // Asignación de valores simulados a servicios y trabajadores REALES
+        const serviceDistribution = currentLocalServices.map(s => ({
+            name: s,
+            value: Math.floor(Math.random() * totalServices)
+        }));
+        const workerDistribution = currentLocalWorkers.map(w => ({
+            name: w,
+            value: Math.floor(Math.random() * totalServices)
+        }));
         
         const topService = [...serviceDistribution].sort((a,b) => b.value - a.value)[0] || { name: 'N/A', value: 0};
         const topWorker = [...workerDistribution].sort((a,b) => b.value - a.value)[0] || { name: 'N/A', value: 0};
@@ -97,13 +196,43 @@ const LocalDetail = () => {
         default: generatedData = { tendencia: [], distribucion: [], metrics: { income: 0, services: 0, clients: 0, topWorkerName: 'N/A', topWorkerServices: 0, topServiceName: 'N/A', topServiceCount: 0 } };
     }
     return { chartData: generatedData, metrics: generatedData.metrics };
-  }, [localId, timeRange, selectedDate]);
+  }, [local, loading, timeRange, selectedDate]); // Dependencias: local (el objeto completo), loading
 
-  if (userRole === 'local' && authLocalId !== localId) { 
-      return <div className="flex items-center justify-center h-screen"><Card className="p-8 text-center"><h1 className="text-2xl font-bold text-destructive">Acceso Denegado</h1><p>No tienes permiso para ver este local.</p><Button onClick={() => navigate('/locales')} className="mt-4">Volver</Button></Card></div>; 
+  if (loading) {
+    return (
+      <div className="p-6 space-y-6">
+        <Skeleton className="h-10 w-1/2" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Card>
+            <CardHeader><Skeleton className="h-6 w-3/4" /></CardHeader>
+            <CardContent><Skeleton className="h-24 w-full" /></CardContent>
+          </Card>
+          <Card>
+            <CardHeader><Skeleton className="h-6 w-3/4" /></CardHeader>
+            <CardContent><Skeleton className="h-24 w-full" /></CardContent>
+          </Card>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Card className="lg:col-span-3 border-0 shadow-md">
+            <CardHeader><Skeleton className="h-6 w-3/4" /></CardHeader>
+            <CardContent><Skeleton className="h-[300px] w-full" /></CardContent>
+          </Card>
+          <Card className="lg:col-span-2 border-0 shadow-md">
+            <CardHeader><Skeleton className="h-6 w-3/4" /></CardHeader>
+            <CardContent><Skeleton className="h-[300px] w-full" /></CardContent>
+          </Card>
+        </div>
+      </div>
+    );
   }
-  if (!local) { 
-      return <div className="flex items-center justify-center h-screen"><Card className="p-8 text-center"><h1 className="text-2xl font-bold">Local no encontrado</h1><p>El local al que intentas acceder no existe.</p><Button onClick={() => navigate('/locales')} className="mt-4">Volver</Button></Card></div>; 
+
+  if (error) {
+    return <div className="p-6 text-red-500">{error}</div>;
+  }
+
+  if (!local) {
+    // Esto podría pasar si el error fue "No tienes permiso" y local se puso a null
+    return <div className="p-6 text-muted-foreground">Local no disponible o acceso denegado.</div>;
   }
 
   const handleDateSelect = (date: Date | undefined, range: TimeRange) => {
@@ -121,12 +250,12 @@ const LocalDetail = () => {
             const end = endOfWeek(selectedDate, { weekStartsOn: 1 });
             return `${format(start, 'd MMM')} - ${format(end, 'd MMM')}`;
         }
-        // --- LÍNEA CORREGIDA ---
         case 'month': return format(selectedDate, 'MMMM yyyy', { locale: es });
         case 'year': return format(selectedDate, 'yyyy');
         default: return 'Seleccionar';
     }
   };
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-stylepro-lavender-50/30 to-stylepro-blue-50/20">
