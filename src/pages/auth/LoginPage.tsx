@@ -18,7 +18,7 @@ export function LoginPage() {
     e.preventDefault(); // Prevenir el comportamiento por defecto del formulario
 
     try {
-      const response = await fetch('http://localhost:3001/api/login', { // Asegúrate que el puerto 3001 sea el de tu backend
+      const response = await fetch('http://localhost:3001/api/login', { // Petición al backend
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -29,13 +29,12 @@ export function LoginPage() {
       const data = await response.json();
 
       if (response.ok) {
-        // Si la respuesta es exitosa, llama a la función `login` de tu hook `useAuth`
-        // Asegúrate de que `login` pueda manejar `role` y `local_id`
+        // Si el login es exitoso, usa la función `login` de tu hook `useAuth`
         login(data.user.username, data.user.role, data.user.local_id);
         toast.success(`Bienvenido, ${data.user.username}!`);
         navigate('/'); // Redirige al dashboard o la ruta principal
       } else {
-        // Si hay un error en la respuesta del servidor
+        // Si hay un error en la respuesta del servidor (ej. 401 Credenciales inválidas)
         toast.error('Credenciales incorrectas', {
           description: data.message || 'Por favor, verifica tu usuario y contraseña.',
         });
@@ -43,7 +42,7 @@ export function LoginPage() {
     } catch (error) {
       console.error('Error al intentar iniciar sesión:', error);
       toast.error('Error de conexión', {
-        description: 'No se pudo conectar con el servidor. Por favor, inténtalo de nuevo.',
+        description: 'No se pudo conectar con el servidor. Por favor, inténtalo de nuevo más tarde.',
       });
     }
   };

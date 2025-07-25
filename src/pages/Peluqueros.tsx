@@ -1,6 +1,11 @@
+// src/pages/Peluqueros.tsx
+import { useState, useEffect, useMemo } from "react";
+import { Star, MapPin, Phone, Award, Scissors, Plus, Edit, Trash2, Search, Filter } from "lucide-react";
+import { CalendarIcon } from 'lucide-react'; // Importar CalendarIcon para el DatePicker
+import { format } from "date-fns"; // Para formatear la fecha
+import { es } from 'date-fns/locale'; // Para fechas en español
+import { cn } from "@/lib/utils"; // Para utilidades de clases
 
-import { useState } from "react";
-import { Star, MapPin, Phone, Award, Scissors, Plus, Edit, Trash2, Search, Filter, Calendar } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,94 +14,270 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+import { Skeleton } from '@/components/ui/skeleton';
+import { Separator } from '@/components/ui/separator';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'; // Importar Popover
+import { Calendar } from '@/components/ui/calendar'; // Importar Calendar
 
-const peluquerosData = [
-  {
-    id: 1,
-    nombre: "María González",
-    especialidad: "Corte y Color",
-    local: "StylePro Centro",
-    telefono: "+52 55 1111-1111",
-    experiencia: "8 años",
-    rating: 4.9,
-    clientesAtendidos: 1248,
-    ingresosMes: 28000,
-    foto: "https://images.unsplash.com/photo-1594824475325-7014831b4902?w=150&h=150&fit=crop&crop=face",
-    servicios: ["Corte Clásico", "Coloración", "Mechas", "Tratamientos"]
-  },
-  {
-    id: 2,
-    nombre: "Carlos Mendoza",
-    especialidad: "Barbería Clásica",
-    local: "StylePro Norte",
-    telefono: "+52 55 2222-2222",
-    experiencia: "12 años",
-    rating: 4.8,
-    clientesAtendidos: 2156,
-    ingresosMes: 32000,
-    foto: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face",
-    servicios: ["Corte Clásico", "Barba", "Bigote", "Afeitado"]
-  },
-  {
-    id: 3,
-    nombre: "Ana Rodríguez",
-    especialidad: "Estilismo Avanzado",
-    local: "StylePro Centro",
-    telefono: "+52 55 3333-3333",
-    experiencia: "6 años",
-    rating: 4.7,
-    clientesAtendidos: 896,
-    ingresosMes: 24000,
-    foto: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face",
-    servicios: ["Peinados", "Ondulado", "Alisado", "Eventos"]
-  },
-  {
-    id: 4,
-    nombre: "Roberto Silva",
-    especialidad: "Corte Moderno",
-    local: "StylePro Sur",
-    telefono: "+52 55 4444-4444",
-    experiencia: "4 años",
-    rating: 4.6,
-    clientesAtendidos: 672,
-    ingresosMes: 21000,
-    foto: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face",
-    servicios: ["Corte Fade", "Undercut", "Pompadour", "Texturizado"]
-  },
-  {
-    id: 5,
-    nombre: "Laura Jiménez",
-    especialidad: "Color Especialista",
-    local: "StylePro Norte",
-    telefono: "+52 55 5555-5555",
-    experiencia: "10 años",
-    rating: 4.9,
-    clientesAtendidos: 1432,
-    ingresosMes: 30000,
-    foto: "https://images.unsplash.com/photo-1494790108755-2616b612b786?w=150&h=150&fit=crop&crop=face",
-    servicios: ["Balayage", "Highlights", "Color Fantasy", "Corrección"]
-  }
-];
+
+// Definir la interfaz para un trabajador (peluquero) con todos los nuevos campos
+interface Trabajador {
+  id: number;
+  nombre: string;
+  apellido: string; // Nuevo
+  edad: number;    // Nuevo
+  dni: string;     // Nuevo
+  telefono: string;
+  nacionalidad: string; // Nuevo
+  estado_civil: string; // Nuevo
+  fecha_ingreso: string; // Nuevo (YYYY-MM-DD)
+  nivel_estudios: string; // Nuevo (renombrado de 'nivel_estudios_alcanzado')
+  experiencia: number; // Ahora es número (años)
+  cantidad_hijos: number; // Nuevo
+  especialidad: string;
+  rating: number;
+  clientesAtendidos: number;
+  ingresosMes: number;
+  foto: string;
+  servicios: string[];
+  local_id: number;
+  local_nombre?: string;
+}
+
+// Definir la interfaz para Local (para el selector de locales)
+interface Local {
+    id: number;
+    nombre: string;
+}
+
+const initialNewPeluqueroState = {
+  nombre: "",
+  apellido: "",
+  edad: "" as any, // Se convertirá a número
+  dni: "",
+  telefono: "",
+  nacionalidad: "",
+  estado_civil: "",
+  fecha_ingreso: undefined as Date | undefined, // Para el DatePicker
+  nivel_estudios: "",
+  experiencia: "" as any, // Se convertirá a número
+  cantidad_hijos: "" as any, // Se convertirá a número
+  especialidad: "",
+  rating: "" as any,
+  clientesAtendidos: "" as any,
+  ingresosMes: "" as any,
+  foto: "",
+  servicios: "", // Se manejará como string de CSV para el input
+  local_id: "" // String para el selector, luego se parsea a number
+};
+
 
 const Peluqueros = () => {
-  const [peluqueros, setPeluqueros] = useState(peluquerosData);
+  const [peluqueros, setPeluqueros] = useState<Trabajador[]>([]);
+  const [locales, setLocales] = useState<Local[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterLocal, setFilterLocal] = useState("todos");
+  const [filterLocalId, setFilterLocalId] = useState("todos");
 
-  const filteredPeluqueros = peluqueros.filter(peluquero => {
-    const matchesSearch = peluquero.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         peluquero.especialidad.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesLocal = filterLocal === "todos" || peluquero.local.includes(filterLocal);
-    return matchesSearch && matchesLocal;
-  });
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [newPeluqueroData, setNewPeluqueroData] = useState(initialNewPeluqueroState);
+  
+  const [isLoadingPeluqueros, setIsLoadingPeluqueros] = useState(true);
+  const [errorPeluqueros, setErrorPeluqueros] = useState<string | null>(null);
 
-  const handleEdit = (peluquero: any) => {
+  const [isLoadingLocales, setIsLoadingLocales] = useState(true);
+  const [errorLocales, setErrorLocales] = useState<string | null>(null);
+
+
+  // --- useEffect para cargar los peluqueros y locales desde el backend ---
+  useEffect(() => {
+    const fetchData = async () => {
+      // Cargar Peluqueros
+      setIsLoadingPeluqueros(true);
+      setErrorPeluqueros(null);
+      try {
+        const resPeluqueros = await fetch('http://localhost:3001/api/trabajadores');
+        if (!resPeluqueros.ok) throw new Error(`Error al cargar peluqueros: ${resPeluqueros.statusText}`);
+        const dataPeluqueros: Trabajador[] = await resPeluqueros.json();
+
+        // Cargar Locales (para el mapeo de nombres y el filtro)
+        setIsLoadingLocales(true);
+        setErrorLocales(null);
+        const resLocales = await fetch('http://localhost:3001/api/locales');
+        if (!resLocales.ok) throw new Error(`Error al cargar locales: ${resLocales.statusText}`);
+        const dataLocales: Local[] = await resLocales.json();
+        setLocales(dataLocales.map(l => ({ id: l.id, nombre: l.nombre })));
+
+        // Mapear el nombre del local a cada peluquero
+        const mappedPeluqueros = dataPeluqueros.map(p => ({
+          ...p,
+          local_nombre: dataLocales.find(l => l.id === p.local_id)?.nombre || 'Desconocido'
+        }));
+        setPeluqueros(mappedPeluqueros);
+
+      } catch (err: any) {
+        console.error("Error fetching data:", err);
+        setErrorPeluqueros(err.message || "Error al cargar los datos. Por favor, inténtalo de nuevo.");
+        toast.error("Error de carga", {
+            description: "No se pudieron obtener los datos de peluqueros o locales del servidor."
+        });
+      } finally {
+        setIsLoadingPeluqueros(false);
+        setIsLoadingLocales(false);
+      }
+    };
+    fetchData();
+  }, []);
+
+
+  const filteredPeluqueros = useMemo(() => {
+    return peluqueros.filter(peluquero => {
+      const matchesSearch = 
+        peluquero.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        peluquero.apellido.toLowerCase().includes(searchTerm.toLowerCase()) || // Nuevo campo
+        peluquero.especialidad.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        peluquero.dni.toLowerCase().includes(searchTerm.toLowerCase()) || // Nuevo campo
+        peluquero.telefono.toLowerCase().includes(searchTerm.toLowerCase()); // Asumo que se busca por número/teléfono
+
+      const matchesLocal = filterLocalId === "todos" || peluquero.local_id.toString() === filterLocalId;
+      return matchesSearch && matchesLocal;
+    });
+  }, [peluqueros, searchTerm, filterLocalId]);
+
+
+  const handleEdit = (peluquero: Trabajador) => {
     toast.success(`Editando perfil de ${peluquero.nombre}`);
+    // Aquí puedes cargar los datos del peluquero en un formulario de edición
   };
 
-  const handleSchedule = (peluquero: any) => {
+  const handleDelete = async (idToDelete: number) => {
+    try {
+      const response = await fetch(`http://localhost:3001/api/trabajadores/${idToDelete}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) {
+        throw new Error(`Error al eliminar peluquero: ${response.statusText}`);
+      }
+      setPeluqueros(prevPeluqueros => prevPeluqueros.filter(p => p.id !== idToDelete));
+      toast.success("Peluquero eliminado correctamente.");
+    } catch (err: any) {
+      console.error("Error al eliminar peluquero:", err);
+      toast.error("Error al eliminar peluquero", {
+        description: err.message || "No se pudo eliminar el peluquero del servidor."
+      });
+    }
+  };
+
+  const handleSchedule = (peluquero: Trabajador) => {
     toast.success(`Abriendo horario de ${peluquero.nombre}`);
   };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { id, value } = e.target;
+    setNewPeluqueroData(prevData => ({ ...prevData, [id]: value }));
+  };
+
+  // Función para manejar el cambio de fecha del DatePicker
+  const handleDateChange = (date: Date | undefined) => {
+    setNewPeluqueroData(prevData => ({ ...prevData, fecha_ingreso: date }));
+  };
+
+  const handleSavePeluquero = async () => {
+    const {
+      nombre, apellido, edad, dni, telefono, nacionalidad, estado_civil,
+      fecha_ingreso, nivel_estudios, experiencia, cantidad_hijos,
+      especialidad, rating, clientesAtendidos, ingresosMes, foto, servicios, local_id
+    } = newPeluqueroData;
+
+    // Validaciones básicas para los nuevos campos
+    if (!nombre || !apellido || !dni || !especialidad || !local_id || !fecha_ingreso) {
+      toast.error("Nombre, apellido, DNI, especialidad, fecha de ingreso y local son obligatorios.");
+      return;
+    }
+
+    try {
+      const peluqueroToSend = {
+        nombre,
+        apellido,
+        edad: parseInt(edad as any) || null, // Convertir a número
+        dni,
+        telefono: telefono || null,
+        nacionalidad: nacionalidad || null,
+        estado_civil: estado_civil || null,
+        fecha_ingreso: fecha_ingreso ? format(fecha_ingreso, "yyyy-MM-dd") : null, // Formatear la fecha
+        nivel_estudios: nivel_estudios || null,
+        experiencia: parseInt(experiencia as any) || 0, // Convertir a número
+        cantidad_hijos: parseInt(cantidad_hijos as any) || 0, // Convertir a número
+        especialidad,
+        rating: parseFloat(rating as any) || 0,
+        clientesAtendidos: parseInt(clientesAtendidos as any) || 0,
+        ingresosMes: parseFloat(ingresosMes as any) || 0,
+        foto: foto || "https://via.placeholder.com/150",
+        servicios: servicios ? servicios.split(',').map(s => s.trim()) : [],
+        local_id: parseInt(local_id, 10)
+      };
+
+      const response = await fetch('http://localhost:3001/api/trabajadores', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(peluqueroToSend)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`Error al guardar peluquero en el backend: ${errorData.message || response.statusText}`);
+      }
+
+      const savedPeluquero: Trabajador = await response.json();
+      savedPeluquero.local_nombre = locales.find(l => l.id === savedPeluquero.local_id)?.nombre || 'Desconocido';
+      
+      setPeluqueros(prevPeluqueros => [...prevPeluqueros, savedPeluquero]);
+      toast.success(`El peluquero "${savedPeluquero.nombre} ${savedPeluquero.apellido}" ha sido agregado exitosamente.`);
+      setNewPeluqueroData(initialNewPeluqueroState);
+      setIsDialogOpen(false);
+
+    } catch (err: any) {
+      console.error("Error al guardar peluquero:", err);
+      toast.error("Error al guardar peluquero", {
+        description: err.message || "No se pudo guardar el peluquero en el servidor."
+      });
+    }
+  };
+
+
+  if (isLoadingPeluqueros || isLoadingLocales) {
+    return (
+      <div className="p-6">
+        <h2 className="text-3xl font-bold mb-6">Peluqueros</h2>
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {[...Array(3)].map((_, i) => (
+            <Card key={i}>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <Skeleton className="h-16 w-16 rounded-full" />
+                <div className="flex-1 ml-4 space-y-2">
+                    <Skeleton className="h-6 w-3/4" />
+                    <Skeleton className="h-4 w-1/2" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-4 w-full mb-2" />
+                <Skeleton className="h-4 w-2/3" />
+                <Separator className="my-4" />
+                <div className="flex justify-between items-center">
+                  <Skeleton className="h-8 w-1/3" />
+                  <Skeleton className="h-8 w-1/4" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (errorPeluqueros || errorLocales) {
+    return <div className="p-6 text-red-500">{errorPeluqueros || errorLocales}</div>;
+  }
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-stylepro-lavender-50/30 to-stylepro-blue-50/20">
@@ -118,53 +299,142 @@ const Peluqueros = () => {
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
-            <Select value={filterLocal} onValueChange={setFilterLocal}>
+            <Select value={filterLocalId} onValueChange={setFilterLocalId}>
               <SelectTrigger className="w-48">
                 <SelectValue placeholder="Filtrar por local" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todos los locales</SelectItem>
-                <SelectItem value="Centro">Spa</SelectItem>
-                <SelectItem value="Norte">Peluqueria</SelectItem>
-                <SelectItem value="Sur">Barberia</SelectItem>
+                {locales.map(local => (
+                    <SelectItem key={local.id} value={local.id.toString()}>{local.nombre}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
-          <Dialog>
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button className="bg-stylepro-lavender-600 hover:bg-stylepro-lavender-700 flex items-center gap-2">
                 <Plus className="h-4 w-4" />
                 Nuevo Peluquero
               </Button>
             </DialogTrigger>
-            <DialogContent className="pointer-events-auto">
+            <DialogContent className="pointer-events-auto overflow-y-auto max-h-[90vh]"> {/* Ajuste para scroll */}
               <DialogHeader>
                 <DialogTitle>Agregar Nuevo Peluquero</DialogTitle>
               </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="nombre" className="text-right">Nombre</Label>
-                  <Input id="nombre" placeholder="Nombre completo..." className="col-span-3" />
+              <div className="grid gap-4 py-4 grid-cols-1 md:grid-cols-2"> {/* Formulario de dos columnas */}
+                {/* Primera Columna (Información Básica) */}
+                <div className="space-y-4">
+                    <div className="grid gap-2">
+                        <Label htmlFor="nombre">Nombre</Label>
+                        <Input id="nombre" value={newPeluqueroData.nombre} onChange={handleInputChange} placeholder="Nombre..." />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="apellido">Apellido</Label>
+                        <Input id="apellido" value={newPeluqueroData.apellido} onChange={handleInputChange} placeholder="Apellido..." />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="especialidad">Especialidad</Label>
+                        <Input id="especialidad" value={newPeluqueroData.especialidad} onChange={handleInputChange} placeholder="Especialidad..." />
+                    </div>
+                     <div className="grid gap-2">
+                        <Label htmlFor="dni">DNI</Label>
+                        <Input id="dni" value={newPeluqueroData.dni} onChange={handleInputChange} placeholder="12345678A" />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="telefono">Teléfono</Label>
+                        <Input id="telefono" value={newPeluqueroData.telefono} onChange={handleInputChange} placeholder="+52 55..." />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="local_id">Local Asignado</Label>
+                        <Select value={newPeluqueroData.local_id} onValueChange={(value) => setNewPeluqueroData(prevData => ({ ...prevData, local_id: value }))}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Seleccionar local" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {locales.map(local => (
+                                    <SelectItem key={local.id} value={local.id.toString()}>{local.nombre}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="foto">URL Foto</Label>
+                        <Input id="foto" value={newPeluqueroData.foto} onChange={handleInputChange} placeholder="https://ejemplo.com/foto.jpg" />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="servicios">Servicios (CSV)</Label>
+                        <Input id="servicios" value={newPeluqueroData.servicios} onChange={handleInputChange} placeholder="Corte, Color, Peinado" />
+                    </div>
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="especialidad" className="text-right">Especialidad</Label>
-                  <Input id="especialidad" placeholder="Especialidad..." className="col-span-3" />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="local" className="text-right">Local</Label>
-                  <Select>
-                    <SelectTrigger className="col-span-3">
-                      <SelectValue placeholder="Seleccionar local" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="centro">StylePro Centro</SelectItem>
-                      <SelectItem value="norte">StylePro Norte</SelectItem>
-                      <SelectItem value="sur">StylePro Sur</SelectItem>
-                    </SelectContent>
-                  </Select>
+
+                {/* Segunda Columna (Detalles Personales/Profesionales) */}
+                <div className="space-y-4">
+                    <div className="grid gap-2">
+                        <Label htmlFor="edad">Edad</Label>
+                        <Input id="edad" type="number" value={newPeluqueroData.edad} onChange={handleInputChange} placeholder="30" />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="nacionalidad">Nacionalidad</Label>
+                        <Input id="nacionalidad" value={newPeluqueroData.nacionalidad} onChange={handleInputChange} placeholder="Mexicana" />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="estado_civil">Estado Civil</Label>
+                        <Input id="estado_civil" value={newPeluqueroData.estado_civil} onChange={handleInputChange} placeholder="Soltero/a" />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="fecha_ingreso">Fecha de Ingreso</Label>
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Button
+                                    variant={"outline"}
+                                    className={cn(
+                                        "w-full justify-start text-left font-normal",
+                                        !newPeluqueroData.fecha_ingreso && "text-muted-foreground"
+                                    )}
+                                >
+                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                    {newPeluqueroData.fecha_ingreso ? format(newPeluqueroData.fecha_ingreso, "PPP", { locale: es }) : <span>Seleccionar fecha</span>}
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0">
+                                <Calendar
+                                    mode="single"
+                                    selected={newPeluqueroData.fecha_ingreso}
+                                    onSelect={handleDateChange}
+                                    initialFocus
+                                    locale={es} // Establecer el locale español
+                                />
+                            </PopoverContent>
+                        </Popover>
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="nivel_estudios">Nivel de Estudios</Label>
+                        <Input id="nivel_estudios" value={newPeluqueroData.nivel_estudios} onChange={handleInputChange} placeholder="Grado Superior..." />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="experiencia">Años de Experiencia</Label>
+                        <Input id="experiencia" type="number" value={newPeluqueroData.experiencia} onChange={handleInputChange} placeholder="5" />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="cantidad_hijos">Cantidad de Hijos</Label>
+                        <Input id="cantidad_hijos" type="number" value={newPeluqueroData.cantidad_hijos} onChange={handleInputChange} placeholder="0" />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="rating">Rating (1.0-5.0)</Label>
+                        <Input id="rating" type="number" step="0.1" value={newPeluqueroData.rating} onChange={handleInputChange} placeholder="4.5" />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="clientesAtendidos">Clientes Atendidos</Label>
+                        <Input id="clientesAtendidos" type="number" value={newPeluqueroData.clientesAtendidos} onChange={handleInputChange} placeholder="1000" />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="ingresosMes">Ingresos/Mes</Label>
+                        <Input id="ingresosMes" type="number" step="0.01" value={newPeluqueroData.ingresosMes} onChange={handleInputChange} placeholder="25000" />
+                    </div>
                 </div>
               </div>
-              <Button onClick={() => toast.success("Peluquero agregado exitosamente")} className="w-full">
+              <Button onClick={handleSavePeluquero} className="w-full">
                 Guardar Peluquero
               </Button>
             </DialogContent>
@@ -186,25 +456,25 @@ const Peluqueros = () => {
                   </Button>
                   <Button 
                     size="sm" 
-                    variant="outline" 
+                    variant="destructive"
                     className="h-8 w-8 p-0"
-                    onClick={() => handleSchedule(peluquero)}
+                    onClick={(e) => { e.stopPropagation(); handleDelete(peluquero.id); }}
                   >
-                    <Calendar className="h-4 w-4" />
+                    <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
                 <div className="flex items-center gap-4">
                   <img 
-                    src={peluquero.foto} 
+                    src={peluquero.foto || "https://via.placeholder.com/150"}
                     alt={peluquero.nombre}
                     className="w-16 h-16 rounded-full object-cover border-4 border-stylepro-lavender-200 transition-transform hover:scale-110"
                   />
                   <div className="flex-1">
-                    <CardTitle className="text-lg mb-1">{peluquero.nombre}</CardTitle>
+                    <CardTitle className="text-lg mb-1">{peluquero.nombre} {peluquero.apellido}</CardTitle> {/* Apellido */}
                     <p className="text-stylepro-lavender-600 font-medium text-sm">{peluquero.especialidad}</p>
                     <div className="flex items-center gap-1 mt-1">
                       <Star className="h-4 w-4 fill-stylepro-gold-500 text-stylepro-gold-500" />
-                      <span className="text-sm font-medium">{peluquero.rating}</span>
+                      <span className="text-sm font-medium">{peluquero.rating.toFixed(1)}</span>
                     </div>
                   </div>
                 </div>
@@ -214,7 +484,7 @@ const Peluqueros = () => {
                 <div className="space-y-2 text-sm">
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <MapPin className="h-4 w-4" />
-                    <span>{peluquero.local}</span>
+                    <span>{peluquero.local_nombre}</span>
                   </div>
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <Phone className="h-4 w-4" />
@@ -222,7 +492,29 @@ const Peluqueros = () => {
                   </div>
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <Award className="h-4 w-4" />
-                    <span>{peluquero.experiencia} de experiencia</span>
+                    <span>{peluquero.experiencia} años de experiencia</span> {/* Experiencia como número */}
+                  </div>
+                  {/* Nuevos campos para mostrar */}
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <span>Edad: {peluquero.edad}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <span>DNI: {peluquero.dni}</span>
+                  </div>
+                   <div className="flex items-center gap-2 text-muted-foreground">
+                    <span>Nacionalidad: {peluquero.nacionalidad}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <span>Estado Civil: {peluquero.estado_civil}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <span>Ingreso: {peluquero.fecha_ingreso ? format(new Date(peluquero.fecha_ingreso), "PPP", { locale: es }) : 'N/A'}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <span>Estudios: {peluquero.nivel_estudios}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <span>Hijos: {peluquero.cantidad_hijos}</span>
                   </div>
                 </div>
                 

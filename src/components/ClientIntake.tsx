@@ -25,7 +25,6 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
 import { UserPlus } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-// No longer importing localesData from "@/data/locales-data";
 
 // Define la interfaz Local para los datos que vienen del backend
 interface Local {
@@ -41,14 +40,13 @@ interface Local {
   imagen: string;
   estado: "Activo" | "Inactivo";
   username: string;
-  password: string; // En una app real, no se debería exponer la contraseña
-  servicios: string[]; // Viene como JSON string, el backend lo parsea
-  trabajadores: string[]; // Viene como JSON string, el backend lo parsear
+  password: string;
+  servicios: string[];
+  trabajadores: string[]; // Asegúrate que esta propiedad exista en la interfaz, incluso si no se usa directamente desde locales
 }
 
 export function ClientIntake() {
-  const { userRole, localId } = useAuth(); // localId es string | null
-  
+  const { userRole, localId } = useAuth();
   const [servicio, setServicio] = useState("");
   const [trabajador, setTrabajador] = useState("");
   const [tipoPago, setTipoPago] = useState("efectivo");
@@ -65,11 +63,10 @@ export function ClientIntake() {
       try {
         let url = '';
         if (userRole === 'admin') {
-          url = 'http://localhost:3001/api/locales'; // Obtener todos los locales para el admin
+          url = 'http://localhost:3001/api/locales';
         } else if (userRole === 'encargado' && localId) {
-          url = `http://localhost:3001/api/locales/${localId}`; // Obtener solo el local del encargado
+          url = `http://localhost:3001/api/locales/${localId}`;
         } else {
-          // No hay rol o localId válido para buscar
           setFetchedLocalesData(null);
           setIsLoadingLocales(false);
           return;
@@ -81,6 +78,7 @@ export function ClientIntake() {
         }
         const data = await response.json();
         setFetchedLocalesData(data);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (err: any) {
         console.error("Error al obtener datos de locales:", err);
         setErrorLocales("No se pudieron cargar los datos de locales. Inténtalo de nuevo.");
@@ -93,35 +91,43 @@ export function ClientIntake() {
     };
 
     fetchLocales();
-  }, [userRole, localId]); // Dependencias para re-ejecutar si cambian el rol o el ID del local
+  }, [userRole, localId]);
 
-  // Lógica para filtrar datos dinámicamente según el usuario y los datos fetched
   const { availableServices, availableWorkers } = useMemo(() => {
     if (isLoadingLocales || errorLocales || !fetchedLocalesData) {
-        return { availableServices: [], availableWorkers: [] }; // Vacío mientras carga o si hay error
+        return { availableServices: [], availableWorkers: [] };
     }
 
     if (userRole === 'admin') {
-      const allLocales = fetchedLocalesData as Local[];
-      const allServices = [...new Set(allLocales.flatMap(local => local.servicios))];
-      const allWorkers = [...new Set(allLocales.flatMap(local => local.trabajadores))];
+      const allLocales = Array.isArray(fetchedLocalesData) ? fetchedLocalesData as Local[] : []; // Asegura que sea un array
+      // CAMBIO CLAVE AQUÍ: Añadir || [] para asegurar que servicios sea un array
+      const allServices = [...new Set(allLocales.flatMap(local => local.servicios || []))];
+      // CAMBIO CLAVE AQUÍ: Añadir || [] para asegurar que trabajadores sea un array
+      // NOTA: 'trabajadores' ya no está en la tabla 'locales'. Deberías obtenerlos de la tabla 'trabajadores'
+      // o pasarlos como prop desde Locales/LocalDetail si se necesitan aquí.
+      // Por ahora, asumiré que ClientIntake NO necesitará todos los trabajadores de todos los locales
+      // si no se los pasa directamente desde Locales.tsx.
+      // Si el userRole es admin y necesita TODOS los trabajadores, tendrías que hacer otra llamada a la API de trabajadores.
+      // Si 'trabajadores' viene de la tabla 'locales' y es null, esto lo manejará.
+      const allWorkers = [...new Set(allLocales.flatMap(local => local.trabajadores || []))]; // Si trabajadores se obtiene de los locales
+
       return { availableServices: allServices, availableWorkers: allWorkers };
     }
     
     // Si es un encargado de local
     if (userRole === 'encargado' && localId) {
-      const currentLocal = fetchedLocalesData as Local; // Debería ser un solo objeto Local
+      const currentLocal = fetchedLocalesData as Local;
       if (currentLocal && currentLocal.id === parseInt(localId, 10)) {
+        // CAMBIO CLAVE AQUÍ: Añadir || [] para asegurar que servicios sea un array
         return {
-          availableServices: currentLocal.servicios,
-          availableWorkers: currentLocal.trabajadores
+          availableServices: currentLocal.servicios || [],
+          availableWorkers: currentLocal.trabajadores || [] // Si trabajadores se obtiene del local específico
         };
       }
     }
     
-    // Por defecto, listas vacías si no se cumple ninguna condición
     return { availableServices: [], availableWorkers: [] };
-  }, [userRole, localId, fetchedLocalesData, isLoadingLocales, errorLocales]); // Dependencias actualizadas
+  }, [userRole, localId, fetchedLocalesData, isLoadingLocales, errorLocales]);
 
   const handleRegister = () => {
     if (!servicio) {
@@ -132,7 +138,6 @@ export function ClientIntake() {
     console.log({ servicio, trabajador: trabajador || "Asignado automáticamente", tipoPago, reseña });
     toast.success("Cliente registrado exitosamente.", { description: `Servicio de ${servicio} registrado.` });
 
-    // Reseteamos el formulario y cerramos el drawer
     setServicio("");
     setTrabajador("");
     setTipoPago("efectivo");
