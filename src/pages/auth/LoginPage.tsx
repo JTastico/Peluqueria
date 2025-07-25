@@ -1,3 +1,4 @@
+// src/pages/auth/LoginPage.tsx
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -5,40 +6,45 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from "sonner";
-import { localesData, adminCredentials } from '@/data/locales-data'; // Importamos los datos
+import { useAuth } from '@/hooks/useAuth'; // Importamos useAuth
 
 export function LoginPage() {
   const [username, setUsernameInput] = useState('');
   const [password, setPassword] = useState('');
   const navigate = useNavigate();
+  const { login } = useAuth(); // Obtenemos la función login del hook
 
-  const handleLogin = () => {
-    const inputUser = username.toLowerCase();
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault(); // Prevenir el comportamiento por defecto del formulario
 
-    // 1. Verificar si es el administrador
-    if (inputUser === adminCredentials.username && password === adminCredentials.password) {
-      localStorage.setItem('userRole', 'admin');
-      localStorage.setItem('username', adminCredentials.username);
-      toast.success(`Bienvenido, ${adminCredentials.username}!`);
-      navigate('/'); // Redirige al admin al dashboard
-      return;
+    try {
+      const response = await fetch('http://localhost:3001/api/login', { // Asegúrate que el puerto 3001 sea el de tu backend
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ username, password }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Si la respuesta es exitosa, llama a la función login del hook de autenticación
+        login(data.user.username, data.user.role, data.user.local_id);
+        toast.success(`Bienvenido, ${data.user.username}!`);
+        navigate('/'); // Redirige al dashboard o la ruta principal
+      } else {
+        // Si el login falla, muestra el mensaje de error del backend
+        toast.error('Credenciales incorrectas', {
+          description: data.message || 'Por favor, verifica tu usuario y contraseña.',
+        });
+      }
+    } catch (error) {
+      console.error('Error al intentar iniciar sesión:', error);
+      toast.error('Error de conexión', {
+        description: 'No se pudo conectar con el servidor. Por favor, inténtalo de nuevo.',
+      });
     }
-
-    // 2. Verificar si es un usuario de un local
-    const foundLocal = localesData.find(local => local.username === inputUser && local.password === password);
-    if (foundLocal) {
-      localStorage.setItem('userRole', 'local'); // Rol genérico para locales
-      localStorage.setItem('username', foundLocal.username);
-      localStorage.setItem('localId', String(foundLocal.id)); // Guardamos el ID del local
-      toast.success(`Bienvenido, ${foundLocal.nombre}!`);
-      navigate('/'); // Redirige al usuario del local
-      return;
-    }
-
-    // 3. Si no se encuentra ninguna credencial
-    toast.error('Credenciales incorrectas', {
-      description: 'Por favor, verifica tu usuario y contraseña.',
-    });
   };
 
   return (
@@ -50,7 +56,7 @@ export function LoginPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={(e) => { e.preventDefault(); handleLogin(); }}>
+          <form onSubmit={handleLogin}> {/* Modificado para llamar a handleLogin */}
             <div className="grid gap-4">
               <div className="grid gap-2">
                 <Label htmlFor="username">Usuario</Label>
