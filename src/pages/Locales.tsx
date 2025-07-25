@@ -9,35 +9,40 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
-import ClientIntake from "@/components/ClientIntake"; // <--- Importación por defecto CORRECTA
+import ClientIntake from "@/components/ClientIntake";
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 
 
-// Definir la interfaz para Local (debe ser la misma que en tu backend)
+// Definir la interfaz para Local (AHORA COINCIDE CON LA DB + CAMPOS MAPEADOS DEL BACKEND)
 interface Local {
   id: number;
-  type: "peluqueria" | "spa" | "barberia";
+  // Campos del frontend mapeados desde la DB por el controlador de backend
+  type: "peluqueria" | "spa" | "barberia"; 
+  peluqueros: number; 
+  ingresosMes: number; 
+  clientesActivos: number; 
+
+  // Campos directos que se esperan de la tabla 'locales' de la DB
   nombre: string;
   direccion: string;
   telefono: string;
   horario: string;
-  peluqueros: number;
-  ingresosMes: number;
-  clientesActivos: number;
-  imagen: string;
-  estado: "Activo" | "Inactivo";
-  username: string;
-  password: string;
+  imagen: string; 
+  estado: "Activo" | "Inactivo"; 
+
+  // Los campos 'username' y 'password' no pertenecen a la tabla 'locales' en la DB
+  // y por lo tanto no se incluyen aquí como propiedades directas del Local fetched.
+  // Se manejan para la creación de usuarios en la tabla 'users'.
 }
 
 const initialNewLocalState = {
   nombre: "",
   direccion: "",
   telefono: "",
-  username: "",
-  password: ""
+  username: "", // Se sigue pidiendo para crear el usuario encargado
+  password: ""  // Se sigue pidiendo para crear el usuario encargado
 };
 
 const Locales = () => {
@@ -129,8 +134,9 @@ const Locales = () => {
     }
 
     try {
+        // Enviar todos los datos necesarios para la creación del local y el usuario encargado
         const newLocalToSend = {
-            type: "peluqueria",
+            type: "peluqueria", // Este 'type' se mapea a 'tipo_local' en el backend
             nombre,
             direccion,
             telefono,
@@ -138,10 +144,10 @@ const Locales = () => {
             peluqueros: 0,
             ingresosMes: 0,
             clientesActivos: 0,
-            imagen: `https://source.unsplash.com/random/300x200?barbershop,${nombre}`,
-            estado: "Activo",
-            username,
-            password,
+            imagen: `https://source.unsplash.com/random/300x200?barbershop,${nombre}`, 
+            estado: "Activo", 
+            username, 
+            password, 
         };
 
         const response = await fetch('http://localhost:3001/api/locales', {

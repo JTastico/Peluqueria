@@ -1,5 +1,6 @@
 // backend/controllers/authController.js
-const { getDb } = require('../db');
+const { getDB } = require('../db');
+// Removido: const bcrypt = require('bcrypt'); // Ya no es necesario para comparación en texto plano
 
 exports.login = async (req, res, next) => {
     const { username, password } = req.body;
@@ -9,14 +10,18 @@ exports.login = async (req, res, next) => {
     }
 
     try {
-        const pool = getDb();
-        const [rows] = await pool.query('SELECT * FROM users WHERE username = ? AND password = ?', [username, password]);
+        const connection = getDB(); 
+        
+        // Buscar al usuario por nombre de usuario Y contraseña (texto plano)
+        const [rows] = await connection.query('SELECT * FROM users WHERE username = ? AND password = ?', [username, password]);
 
         if (rows.length === 0) {
+            // No se encontró el usuario con esa combinación de credenciales
             return res.status(401).json({ message: 'Credenciales inválidas.' });
         }
 
-        const user = rows[0];
+        const user = rows[0]; // Si llegamos aquí, se encontró un usuario con credenciales válidas
+        
         res.json({
             message: 'Login exitoso',
             user: {
@@ -27,6 +32,7 @@ exports.login = async (req, res, next) => {
             }
         });
     } catch (err) {
+        console.error('Error en el login:', err); // Log del error para depuración
         next(err); // Pasa el error al middleware de manejo de errores
     }
 };

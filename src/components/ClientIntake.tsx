@@ -131,12 +131,14 @@ const ClientIntake = () => {
     
     let filtered = trabajadores.filter(t => t.local_id === currentLocalId);
 
-    if (clienteData.servicioId) {
-      const selectedServicio = servicios.find(s => s.id === parseInt(clienteData.servicioId, 10));
-      if (selectedServicio) {
-        filtered = filtered.filter(t => (t.servicios || []).includes(selectedServicio.nombre));
-      }
-    }
+    // Removido: La selección de un servicio no debe influir en la selección del trabajador.
+    // El usuario quiere poder seleccionar a cualquier trabajador de ese local.
+    // if (clienteData.servicioId) {
+    //   const selectedServicio = servicios.find(s => s.id === parseInt(clienteData.servicioId, 10));
+    //   if (selectedServicio) {
+    //     filtered = filtered.filter(t => (t.servicios || []).includes(selectedServicio.nombre));
+    //   }
+    // }
     return filtered;
   }, [trabajadores, servicios, clienteData.localId, clienteData.servicioId]);
 
@@ -245,8 +247,6 @@ const ClientIntake = () => {
                   <Label htmlFor="apellido">Apellido</Label>
                   <Input id="apellido" value={clienteData.apellido} onChange={handleInputChange} />
                 </div>
-                {/* ELIMINADO: Teléfono */}
-                {/* ELIMINADO: Email */}
               </div>
 
               <Separator orientation="vertical" className="hidden md:block" />
@@ -257,10 +257,10 @@ const ClientIntake = () => {
                 <h3 className="text-lg font-semibold text-stylepro-lavender-800">Detalles de la Cita</h3>
                 {/* Selector de Local */}
                 <div>
-                  <Label htmlFor="localId">Local</Label>
+                  <Label htmlFor={userRole === 'admin' ? "localSelectTrigger" : "localNameDisplay"}>Local</Label>
                   {userRole === 'admin' ? (
                     <Select value={clienteData.localId} onValueChange={(value) => handleSelectChange("localId", value)}>
-                      <SelectTrigger>
+                      <SelectTrigger id="localSelectTrigger">
                         <SelectValue placeholder="Seleccionar local" />
                       </SelectTrigger>
                       <SelectContent>
@@ -280,9 +280,9 @@ const ClientIntake = () => {
 
                 {/* Selector de Servicio */}
                 <div>
-                  <Label htmlFor="servicioId">Servicio</Label>
+                  <Label htmlFor="servicioSelectTrigger">Servicio</Label>
                   <Select value={clienteData.servicioId} onValueChange={(value) => handleSelectChange("servicioId", value)} disabled={!clienteData.localId}>
-                    <SelectTrigger>
+                    <SelectTrigger id="servicioSelectTrigger">
                       <SelectValue placeholder="Seleccionar servicio" />
                     </SelectTrigger>
                     <SelectContent>
@@ -301,9 +301,9 @@ const ClientIntake = () => {
 
                 {/* Selector de Trabajador */}
                 <div>
-                  <Label htmlFor="trabajadorId">Trabajador (Opcional)</Label>
+                  <Label htmlFor="trabajadorSelectTrigger">Trabajador (Opcional)</Label>
                   <Select value={clienteData.trabajadorId} onValueChange={(value) => handleSelectChange("trabajadorId", value)} disabled={!clienteData.localId}>
-                    <SelectTrigger>
+                    <SelectTrigger id="trabajadorSelectTrigger">
                       <SelectValue placeholder="Seleccionar trabajador" />
                     </SelectTrigger>
                     <SelectContent>
@@ -311,7 +311,7 @@ const ClientIntake = () => {
                       {availableTrabajadores.length > 0 ? (
                         availableTrabajadores.map(trabajador => (
                           <SelectItem key={trabajador.id} value={trabajador.id.toString()}>
-                            {trabajador.nombre} {trabajador.apellido} ({trabajador.especialidad})
+                            {trabajador.nombre} {trabajador.apellido}
                           </SelectItem>
                         ))
                       ) : (
