@@ -6,19 +6,20 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from "sonner";
-import { useAuth } from '@/hooks/useAuth'; // Importamos useAuth
+import { useAuth } from '@/hooks/useAuth';
 
 export function LoginPage() {
   const [username, setUsernameInput] = useState('');
   const [password, setPassword] = useState('');
   const navigate = useNavigate();
-  const { login } = useAuth(); // Obtenemos la función login del hook
+  const { login } = useAuth();
 
   const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault(); // Prevenir el comportamiento por defecto del formulario
+    e.preventDefault();
 
     try {
-      const response = await fetch('http://localhost:3001/api/login', { // Petición al backend
+      // CAMBIO CLAVE AQUÍ: La URL correcta del endpoint de login en el backend
+      const response = await fetch('http://localhost:3001/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -29,12 +30,10 @@ export function LoginPage() {
       const data = await response.json();
 
       if (response.ok) {
-        // Si el login es exitoso, usa la función `login` de tu hook `useAuth`
         login(data.user.username, data.user.role, data.user.local_id);
         toast.success(`Bienvenido, ${data.user.username}!`);
-        navigate('/'); // Redirige al dashboard o la ruta principal
+        navigate('/');
       } else {
-        // Si hay un error en la respuesta del servidor (ej. 401 Credenciales inválidas)
         toast.error('Credenciales incorrectas', {
           description: data.message || 'Por favor, verifica tu usuario y contraseña.',
         });
