@@ -10,7 +10,8 @@ const errorHandler = require('./middleware/errorHandler');
 const authRoutes = require('./routes/authRoutes');
 const localesRoutes = require('./routes/localesRoutes');
 const trabajadoresRoutes = require('./routes/trabajadoresRoutes');
-const serviciosRoutes = require('./routes/serviciosRoutes'); // NUEVO: Importar rutas de servicios
+const serviciosRoutes = require('./routes/serviciosRoutes');
+const clientesRoutes = require('./routes/clientesRoutes'); // NUEVO: Importar rutas de clientes
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -23,9 +24,10 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/locales', localesRoutes);
 app.use('/api/trabajadores', trabajadoresRoutes);
-app.use('/api/servicios', serviciosRoutes); // NUEVO: Montar rutas de servicios
+app.use('/api/servicios', serviciosRoutes);
+app.use('/api/clientes', clientesRoutes); // NUEVO: Montar rutas de clientes
 
-// Middleware de manejo de errores
+// Middleware de manejo de errores (siempre al final, después de todas las rutas)
 app.use(errorHandler);
 
 // Iniciar la base de datos y luego el servidor

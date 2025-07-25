@@ -9,10 +9,10 @@ import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { useAuth } from '@/hooks/useAuth';
 import { Skeleton } from '@/components/ui/skeleton';
-import { format } from "date-fns"; // Importar format de date-fns
+import { format } from "date-fns";
 
 
-// Definir la interfaz para un Servicio (AJUSTADA: SIN popularidad, ingresosMes, clientesMes)
+// Definir la interfaz para un Servicio
 interface Servicio {
   id: number;
   nombre: string;
@@ -30,7 +30,7 @@ interface Trabajador {
   nombre: string;
   apellido: string;
   especialidad: string;
-  servicios: string[]; // Array de nombres de servicios que realiza
+  servicios: string[];
   local_id: number;
 }
 
@@ -43,7 +43,6 @@ interface Local {
 const ClientIntake = () => {
   const { userRole, localId: authLocalId } = useAuth();
 
-  // Obtener fecha y hora actuales para inicialización
   const now = new Date();
   const initialDate = format(now, "yyyy-MM-dd");
   const initialTime = format(now, "HH:mm");
@@ -51,12 +50,12 @@ const ClientIntake = () => {
   const [clienteData, setClienteData] = useState({
     nombre: "",
     apellido: "",
-    telefono: "",
-    email: "",
-    fechaCita: initialDate, // Automática
-    horaCita: initialTime,   // Automática
+    // telefono: "", ELIMINADO
+    // email: "", ELIMINADO
+    fechaCita: initialDate,
+    horaCita: initialTime,
     servicioId: "",
-    trabajadorId: "any_worker", // Valor por defecto no vacío
+    trabajadorId: "any_worker",
     notas: "",
     localId: userRole === 'encargado' && authLocalId ? authLocalId.toString() : ""
   });
@@ -142,30 +141,65 @@ const ClientIntake = () => {
   }, [trabajadores, servicios, clienteData.localId, clienteData.servicioId]);
 
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!clienteData.nombre || !clienteData.servicioId || !clienteData.localId) {
-      toast.error("Por favor, completa al menos el nombre del cliente, el servicio y el local.");
+    if (!clienteData.nombre || !clienteData.servicioId || !clienteData.localId || !clienteData.fechaCita || !clienteData.horaCita) {
+      toast.error("Por favor, completa al menos el nombre del cliente, el servicio, el local, la fecha y la hora.");
       return;
     }
-    const finalTrabajadorId = clienteData.trabajadorId === "any_worker" ? "" : clienteData.trabajadorId;
+    const finalTrabajadorId = clienteData.trabajadorId === "any_worker" ? null : parseInt(clienteData.trabajadorId, 10);
 
-    console.log("Datos del cliente para la cita:", { ...clienteData, trabajadorId: finalTrabajadorId });
-    toast.success("Cita agendada", {
-      description: `Cita para ${clienteData.nombre} ${clienteData.apellido || ''} el ${clienteData.fechaCita} a las ${clienteData.horaCita} para el servicio ${servicios.find(s => s.id === parseInt(clienteData.servicioId))?.nombre || ''} en el local ${locales.find(l => l.id === parseInt(clienteData.localId))?.nombre || ''}.`
-    });
-    setClienteData({
-      nombre: "",
-      apellido: "",
-      telefono: "",
-      email: "",
-      fechaCita: initialDate,
-      horaCita: initialTime,
-      servicioId: "",
-      trabajadorId: "any_worker",
-      notas: "",
-      localId: userRole === 'encargado' && authLocalId ? authLocalId.toString() : ""
-    });
+    try {
+        const citaToSend = {
+            nombre: clienteData.nombre,
+            apellido: clienteData.apellido || null,
+            // telefono: clienteData.telefono || null, ELIMINADO
+            // email: clienteData.email || null, ELIMINADO
+            fechaCita: clienteData.fechaCita,
+            horaCita: clienteData.horaCita,
+            servicioId: parseInt(clienteData.servicioId, 10),
+            trabajadorId: finalTrabajadorId,
+            localId: parseInt(clienteData.localId, 10),
+            notas: clienteData.notas || null
+        };
+
+        const response = await fetch('http://localhost:3001/api/clientes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(citaToSend)
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(`Error al agendar cita: ${errorData.message || response.statusText}`);
+        }
+
+        const savedCita = await response.json();
+        console.log("Cita guardada:", savedCita);
+        
+        toast.success("Cita agendada exitosamente.", {
+            description: `Cita para ${clienteData.nombre} ${clienteData.apellido || ''} el ${clienteData.fechaCita} a las ${clienteData.horaCita} para el servicio "${servicios.find(s => s.id === parseInt(clienteData.servicioId))?.nombre || ''}" en "${locales.find(l => l.id === parseInt(clienteData.localId))?.nombre || ''}".`
+        });
+
+        setClienteData({
+          nombre: "",
+          apellido: "",
+          // telefono: "", ELIMINADO
+          // email: "", ELIMINADO
+          fechaCita: initialDate,
+          horaCita: initialTime,
+          servicioId: "",
+          trabajadorId: "any_worker",
+          notas: "",
+          localId: userRole === 'encargado' && authLocalId ? authLocalId.toString() : ""
+        });
+
+    } catch (err: any) {
+        console.error("Error al agendar cita:", err);
+        toast.error("Error al agendar cita", {
+            description: err.message || "No se pudo agendar la cita en el servidor."
+        });
+    }
   };
 
   if (isLoading) {
@@ -211,6 +245,8 @@ const ClientIntake = () => {
                   <Label htmlFor="apellido">Apellido</Label>
                   <Input id="apellido" value={clienteData.apellido} onChange={handleInputChange} />
                 </div>
+                {/* ELIMINADO: Teléfono */}
+                {/* ELIMINADO: Email */}
               </div>
 
               <Separator orientation="vertical" className="hidden md:block" />
@@ -285,7 +321,7 @@ const ClientIntake = () => {
                   </Select>
                 </div>
 
-                {/* Fecha y Hora Automáticas */}
+                {/* Fecha y Hora Automáticas (Solo Lectura) */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="fechaCita">Fecha de Cita</Label>

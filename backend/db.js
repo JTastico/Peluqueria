@@ -1,6 +1,6 @@
 // backend/db.js
 const mysql = require('mysql2/promise');
-require('dotenv').config(); // Cargar variables de entorno
+require('dotenv').config();
 
 const dbConfig = {
     host: process.env.DB_HOST,
@@ -12,16 +12,14 @@ const dbConfig = {
     queueLimit: 0
 };
 
-let pool; // Pool de conexiones a la base de datos
+let pool;
 
-// Datos iniciales de locales
 const initialLocalesData = [
   { id: 1, type: "barberia", nombre: "Barberia Koko", direccion: "Av. Principal 123, Centro", telefono: "+52 55 1234-5678", horario: "Lun-Sab 9:00-20:00", peluqueros: 5, ingresosMes: 85000, clientesActivos: 142, imagen: "https://images.unsplash.com/photo-1560066984-138dadb4c035?w=300&h=200&fit=crop", estado: "Activo", username: "barberia", password: "barberia" },
   { id: 2, type: "peluqueria", nombre: "Peluqueria Koko", direccion: "Blvd. Norte 456, Zona Norte", telefono: "+52 55 2345-6789", horario: "Lun-Dom 8:00-21:00", peluqueros: 7, ingresosMes: 92000, clientesActivos: 186, imagen: "https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=300&h=200&fit=crop", estado: "Activo", username: "peluqueria", password: "peluqueria" },
   { id: 3, type: "spa", nombre: "Spa Koko", direccion: "Col. Sur 789, Zona Sur", telefono: "+52 55 3456-7890", horario: "Lun-Sab 10:00-19:00", peluqueros: 4, ingresosMes: 67000, clientesActivos: 98, imagen: "https://images.unsplash.com/photo-1521590832167-7bcbfaa6381f?w=300&h=200&fit=fit", estado: "Activo", username: "spa", password: "spa" }
 ];
 
-// Datos iniciales para la tabla 'trabajadores' (con nuevos campos)
 const initialTrabajadoresData = [
     { id: 1, nombre: "María", apellido: "González", edad: 30, dni: "12345678A", telefono: "+52 55 1111-1111", nacionalidad: "Mexicana", estado_civil: "Soltera", fecha_ingreso: "2017-03-15", nivel_estudios: "Grado Superior", experiencia: 8, cantidad_hijos: 0, especialidad: "Corte y Color", rating: 4.9, clientesAtendidos: 1248, ingresosMes: 28000, foto: "https://images.unsplash.com/photo-1594824475325-7014831b4902?w=150&h=150&fit=crop&crop=face", servicios: ["Corte Clásico", "Coloración", "Mechas", "Tratamientos"], local_id: 1 },
     { id: 2, nombre: "Carlos", apellido: "Mendoza", edad: 45, dni: "87654321B", telefono: "+52 55 2222-2222", nacionalidad: "Colombiana", estado_civil: "Casado", fecha_ingreso: "2010-06-01", nivel_estudios: "Licenciatura", experiencia: 12, cantidad_hijos: 2, especialidad: "Barbería Clásica", rating: 4.8, clientesAtendidos: 2156, ingresosMes: 32000, foto: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face", servicios: ["Corte Clásico", "Barba", "Bigote", "Afeitado"], local_id: 2 },
@@ -30,20 +28,22 @@ const initialTrabajadoresData = [
     { id: 5, nombre: "Laura", apellido: "Jiménez", edad: 40, dni: "98765432E", telefono: "+52 55 5555-5555", nacionalidad: "Española", estado_civil: "Divorciada", fecha_ingreso: "2015-02-20", nivel_estudios: "Doctorado", experiencia: 10, cantidad_hijos: 3, especialidad: "Color Especialista", rating: 4.9, clientesAtendidos: 1432, ingresosMes: 30000, foto: "https://images.unsplash.com/photo-1494790108755-2616b612b786?w=150&h=150&fit=crop&crop=face", servicios: ["Balayage", "Highlights", "Color Fantasy", "Corrección"], local_id: 2 }
 ];
 
-// Datos iniciales para la tabla 'servicios' (SIN popularidad, ingresosMes, clientesMes)
 const initialServiciosData = [
-  // Servicios para Barberia Koko (local_id: 1)
   { id: 101, nombre: "Corte Masculino Clásico", categoria: "Corte", precio: 25.00, duracion: "30 min", descripcion: "Corte de cabello tradicional para hombres.", local_id: 1 },
   { id: 102, nombre: "Afeitado con Toalla Caliente", categoria: "Barbería", precio: 20.00, duracion: "25 min", descripcion: "Afeitado tradicional con toalla caliente y productos post-afeitado.", local_id: 1 },
   { id: 103, nombre: "Diseño de Barba y Bigote", categoria: "Barbería", precio: 18.00, duracion: "20 min", descripcion: "Perfilado y diseño profesional de barba y bigote.", local_id: 1 },
-  // Servicios para Peluqueria Koko (local_id: 2)
   { id: 201, nombre: "Corte Femenino Moderno", categoria: "Corte", precio: 35.00, duracion: "45 min", descripcion: "Corte de cabello moderno y personalizado para mujeres.", local_id: 2 },
   { id: 202, nombre: "Coloración Balayage", categoria: "Color", precio: 120.00, duracion: "3 hr", descripcion: "Técnica de coloración Balayage para un look natural.", local_id: 2 },
   { id: 203, nombre: "Peinado para Fiesta", categoria: "Peinado", precio: 50.00, duracion: "60 min", descripcion: "Peinado elegante y duradero para ocasiones especiales.", local_id: 2 },
-  // Servicios para Spa Koko (local_id: 3)
   { id: 301, nombre: "Masaje Relajante Completo", categoria: "Masaje", precio: 60.00, duracion: "60 min", descripcion: "Masaje de cuerpo completo para aliviar el estrés.", local_id: 3 },
   { id: 302, nombre: "Limpieza Facial Profunda", categoria: "Facial", precio: 45.00, duracion: "50 min", descripcion: "Limpieza y purificación profunda de la piel del rostro.", local_id: 3 },
   { id: 303, nombre: "Manicura y Pedicura Spa", categoria: "Uñas", precio: 30.00, duracion: "75 min", descripcion: "Cuidado completo de manos y pies con tratamientos de spa.", local_id: 3 }
+];
+
+// --- CAMBIO CLAVE AQUÍ: Datos iniciales para la tabla 'clientes' (SIN telefono ni email) ---
+const initialClientesData = [
+    { id: 1, nombre: "Juan", apellido: "Pérez", fecha_cita: "2025-07-25", hora_cita: "10:00:00", servicio_id: 101, trabajador_id: 1, local_id: 1, notas: "Cliente recurrente." },
+    { id: 2, nombre: "María", apellido: "Gómez", fecha_cita: "2025-07-25", hora_cita: "14:30:00", servicio_id: 201, trabajador_id: 2, local_id: 2, notas: "Primera cita." }
 ];
 
 
@@ -124,7 +124,7 @@ const initializeDatabase = async () => {
         `);
         console.log('Tabla de trabajadores creada o ya existe.');
 
-        // Crear la tabla de servicios (CON esquema SIN popularidad, ingresosMes, clientesMes)
+        // Crear la tabla de servicios
         await pool.query(`
             CREATE TABLE IF NOT EXISTS servicios (
                 id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -138,6 +138,28 @@ const initializeDatabase = async () => {
             )
         `);
         console.log('Tabla de servicios creada o ya existe.');
+
+        // --- CAMBIO CLAVE AQUÍ: Crear la tabla de clientes (SIN telefono ni email) ---
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS clientes (
+                id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                nombre VARCHAR(255) NOT NULL,
+                apellido VARCHAR(255),
+                -- telefono VARCHAR(50), ELIMINADO
+                -- email VARCHAR(255), ELIMINADO
+                fecha_cita DATE NOT NULL,
+                hora_cita TIME NOT NULL,
+                servicio_id BIGINT NOT NULL,
+                trabajador_id BIGINT,
+                local_id BIGINT NOT NULL,
+                notas TEXT,
+                fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (servicio_id) REFERENCES servicios(id) ON DELETE CASCADE,
+                FOREIGN KEY (trabajador_id) REFERENCES trabajadores(id) ON DELETE SET NULL,
+                FOREIGN KEY (local_id) REFERENCES locales(id) ON DELETE CASCADE
+            );
+        `);
+        console.log('Tabla de clientes creada o ya existe.');
 
 
         // Inserción inicial para locales
@@ -191,6 +213,29 @@ const initializeDatabase = async () => {
             }
             console.log('Datos de servicios por defecto insertados (o ya existían).');
         }
+
+        // --- CAMBIO CLAVE AQUÍ: Inserción inicial para clientes (SIN telefono ni email) ---
+        const [clientesRowsCount] = await pool.query("SELECT COUNT(*) as count FROM clientes");
+        if (clientesRowsCount[0].count === 0) {
+            for (const cliente of initialClientesData) {
+                const [localExists] = await pool.query('SELECT id FROM locales WHERE id = ?', [cliente.local_id]);
+                const [servicioExists] = await pool.query('SELECT id FROM servicios WHERE id = ?', [cliente.servicio_id]);
+                const [trabajadorExists] = cliente.trabajador_id ? await pool.query('SELECT id FROM trabajadores WHERE id = ?', [cliente.trabajador_id]) : [null];
+
+                if (localExists.length > 0 && servicioExists.length > 0 && (!cliente.trabajador_id || (trabajadorExists && trabajadorExists.length > 0))) { // Añadido check para trabajadorExists
+                    await pool.query(
+                        // NOTA: 'telefono' y 'email' ya no se incluyen aquí
+                        `INSERT INTO clientes (id, nombre, apellido, fecha_cita, hora_cita, servicio_id, trabajador_id, local_id, notas)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                        [cliente.id, cliente.nombre, cliente.apellido, cliente.fecha_cita, cliente.hora_cita, cliente.servicio_id, cliente.trabajador_id, cliente.local_id, cliente.notas]
+                    );
+                } else {
+                    console.warn(`Advertencia: No se pudo insertar cliente ${cliente.nombre} debido a IDs de local, servicio o trabajador no encontrados.`);
+                }
+            }
+            console.log('Datos de clientes por defecto insertados (o ya existían).');
+        }
+
 
     } catch (err) {
         console.error('Error al inicializar la base de datos:', err.message);
