@@ -9,13 +9,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
-import { ClientIntake } from "@/components/ClientIntake";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Separator } from "@/components/ui/separator";
+import ClientIntake from "@/components/ClientIntake"; // <--- Importación por defecto CORRECTA
+import { Skeleton } from '@/components/ui/skeleton';
+import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 
 
-// Define la interfaz para Local (debe ser la misma que en tu backend)
+// Definir la interfaz para Local (debe ser la misma que en tu backend)
 interface Local {
   id: number;
   type: "peluqueria" | "spa" | "barberia";
@@ -29,9 +29,7 @@ interface Local {
   imagen: string;
   estado: "Activo" | "Inactivo";
   username: string;
-  password: string; // En una app real, no se debería exponer la contraseña
-  servicios: string[];
-  trabajadores: string[];
+  password: string;
 }
 
 const initialNewLocalState = {
@@ -43,24 +41,23 @@ const initialNewLocalState = {
 };
 
 const Locales = () => {
-  const { userRole, localId: authLocalId } = useAuth(); // Renombramos localId para evitar conflictos
+  const { userRole, localId: authLocalId } = useAuth();
   const navigate = useNavigate();
 
   const [locales, setLocales] = useState<Local[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [editingLocal, setEditingLocal] = useState<any>(null); // Mantener para la funcionalidad de edición
+  const [editingLocal, setEditingLocal] = useState<any>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [newLocalData, setNewLocalData] = useState(initialNewLocalState);
-  const [isLoadingLocales, setIsLoadingLocales] = useState(true); // Estado de carga
-  const [errorLocales, setErrorLocales] = useState<string | null>(null); // Estado de error
+  const [isLoadingLocales, setIsLoadingLocales] = useState(true);
+  const [errorLocales, setErrorLocales] = useState<string | null>(null);
 
-  // --- useEffect para cargar los locales desde el backend al montar el componente ---
   useEffect(() => {
     const fetchLocales = async () => {
       setIsLoadingLocales(true);
       setErrorLocales(null);
       try {
-        const response = await fetch('http://localhost:3001/api/locales'); // Obtener TODOS los locales
+        const response = await fetch('http://localhost:3001/api/locales');
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -77,22 +74,20 @@ const Locales = () => {
       }
     };
     fetchLocales();
-  }, []); // El array vacío asegura que se ejecuta solo una vez al montar
+  }, []);
 
   const filteredLocales = useMemo(() => {
     let currentLocales = locales;
   
-    // Filtro por rol: si es encargado, solo ve su local
     if (userRole === 'encargado' && authLocalId) {
       currentLocales = currentLocales.filter(local => local.id === parseInt(authLocalId, 10));
     }
   
-    // Filtro por término de búsqueda (siempre aplica)
     return currentLocales.filter(local =>
       local.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
       local.direccion.toLowerCase().includes(searchTerm.toLowerCase())
     );
-  }, [locales, searchTerm, userRole, authLocalId]); // Dependencias del useMemo
+  }, [locales, searchTerm, userRole, authLocalId]);
   
 
   const handleEdit = (local: any) => {
@@ -101,22 +96,22 @@ const Locales = () => {
   };
 
   const handleDelete = async (idToDelete: number) => {
-    // --- Lógica: Eliminar en el backend ---
     try {
         const response = await fetch(`http://localhost:3001/api/locales/${idToDelete}`, {
             method: 'DELETE',
         });
 
         if (!response.ok) {
-            throw new Error(`Error al eliminar local: ${response.statusText}`);
+            const errorData = await response.json();
+            throw new Error(`Error al eliminar local: ${errorData.message || response.statusText}`);
         }
 
         setLocales(prevLocales => prevLocales.filter(local => local.id !== idToDelete));
         toast.success("Local eliminado correctamente.");
-    } catch (err) {
+    } catch (err: any) {
         console.error("Error al eliminar local:", err);
         toast.error("Error al eliminar local", {
-            description: "No se pudo eliminar el local del servidor."
+            description: err.message || "No se pudo eliminar el local del servidor."
         });
     }
   };
@@ -134,25 +129,21 @@ const Locales = () => {
     }
 
     try {
-        // --- CAMBIO CLAVE AQUÍ: No enviamos 'id' al backend ---
         const newLocalToSend = {
-            type: "peluqueria", // Considera permitir al usuario elegir el tipo
+            type: "peluqueria",
             nombre,
             direccion,
             telefono,
-            horario: "Lun-Sab 9:00-20:00", // Valores por defecto
+            horario: "Lun-Sab 9:00-20:00",
             peluqueros: 0,
             ingresosMes: 0,
             clientesActivos: 0,
-            imagen: `https://source.unsplash.com/random/300x200?barbershop,${nombre}`, // Imagen por defecto
+            imagen: `https://source.unsplash.com/random/300x200?barbershop,${nombre}`,
             estado: "Activo",
             username,
             password,
-            servicios: [], // Vacío por defecto
-            trabajadores: [] // Vacío por defecto
         };
 
-        // Petición POST al backend para agregar el local
         const response = await fetch('http://localhost:3001/api/locales', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -164,12 +155,12 @@ const Locales = () => {
             throw new Error(`Error al guardar local en el backend: ${errorData.message || response.statusText}`);
         }
         
-        const savedLocal: Local = await response.json(); // El backend nos devuelve el nuevo local con su ID
+        const savedLocal: Local = await response.json();
 
-        setLocales(prevLocales => [...prevLocales, savedLocal]); // Añadir el local devuelto por el backend
+        setLocales(prevLocales => [...prevLocales, savedLocal]);
         toast.success(`El local "${savedLocal.nombre}" ha sido agregado exitosamente.`);
-        setNewLocalData(initialNewLocalState); // Resetear formulario
-        setIsDialogOpen(false); // Cerrar diálogo
+        setNewLocalData(initialNewLocalState);
+        setIsDialogOpen(false);
     } catch (err: any) {
         console.error("Error al guardar local:", err);
         toast.error("Error al guardar local", {
@@ -237,8 +228,8 @@ const Locales = () => {
             <div className="flex-1 max-w-md">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                <Input
-                  placeholder="Buscar locales..."
+                <Input 
+                  placeholder="Buscar locales..." 
                   className="pl-10"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -336,7 +327,7 @@ const Locales = () => {
           ))}
         </div>
 
-        {filteredLocales.length === 0 && !isLoadingLocales && (
+        {filteredLocales.length === 0 && (
           <div className="text-center py-16">
             <p className="text-muted-foreground">No se encontraron locales.</p>
           </div>

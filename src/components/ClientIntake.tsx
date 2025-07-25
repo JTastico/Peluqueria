@@ -1,232 +1,319 @@
 // src/components/ClientIntake.tsx
-
-import { useState, useMemo, useEffect } from "react";
-import {
-  Drawer,
-  DrawerClose,
-  DrawerContent,
-  DrawerDescription,
-  DrawerFooter,
-  DrawerHeader,
-  DrawerTitle,
-  DrawerTrigger,
-} from "@/components/ui/drawer";
+import { useState, useEffect, useMemo } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
-import { UserPlus } from "lucide-react";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from '@/hooks/useAuth';
+import { Skeleton } from '@/components/ui/skeleton';
+import { format } from "date-fns"; // Importar format de date-fns
 
-// Define la interfaz Local para los datos que vienen del backend
+
+// Definir la interfaz para un Servicio (AJUSTADA: SIN popularidad, ingresosMes, clientesMes)
+interface Servicio {
+  id: number;
+  nombre: string;
+  categoria: string;
+  precio: number;
+  duracion: string;
+  descripcion: string;
+  local_id: number;
+  local_nombre?: string;
+}
+
+// Definir la interfaz para un Trabajador
+interface Trabajador {
+  id: number;
+  nombre: string;
+  apellido: string;
+  especialidad: string;
+  servicios: string[]; // Array de nombres de servicios que realiza
+  local_id: number;
+}
+
+// Definir la interfaz para un Local
 interface Local {
   id: number;
-  type: "peluqueria" | "spa" | "barberia";
   nombre: string;
-  direccion: string;
-  telefono: string;
-  horario: string;
-  peluqueros: number;
-  ingresosMes: number;
-  clientesActivos: number;
-  imagen: string;
-  estado: "Activo" | "Inactivo";
-  username: string;
-  password: string;
-  servicios: string[];
-  trabajadores: string[]; // Asegúrate que esta propiedad exista en la interfaz, incluso si no se usa directamente desde locales
 }
 
-export function ClientIntake() {
-  const { userRole, localId } = useAuth();
-  const [servicio, setServicio] = useState("");
-  const [trabajador, setTrabajador] = useState("");
-  const [tipoPago, setTipoPago] = useState("efectivo");
-  const [reseña, setReseña] = useState("");
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [fetchedLocalesData, setFetchedLocalesData] = useState<Local[] | Local | null>(null);
-  const [isLoadingLocales, setIsLoadingLocales] = useState(true);
-  const [errorLocales, setErrorLocales] = useState<string | null>(null);
+const ClientIntake = () => {
+  const { userRole, localId: authLocalId } = useAuth();
+
+  // Obtener fecha y hora actuales para inicialización
+  const now = new Date();
+  const initialDate = format(now, "yyyy-MM-dd");
+  const initialTime = format(now, "HH:mm");
+
+  const [clienteData, setClienteData] = useState({
+    nombre: "",
+    apellido: "",
+    telefono: "",
+    email: "",
+    fechaCita: initialDate, // Automática
+    horaCita: initialTime,   // Automática
+    servicioId: "",
+    trabajadorId: "any_worker", // Valor por defecto no vacío
+    notas: "",
+    localId: userRole === 'encargado' && authLocalId ? authLocalId.toString() : ""
+  });
+
+  const [servicios, setServicios] = useState<Servicio[]>([]);
+  const [trabajadores, setTrabajadores] = useState<Trabajador[]>([]);
+  const [locales, setLocales] = useState<Local[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchLocales = async () => {
-      setIsLoadingLocales(true);
-      setErrorLocales(null);
+    const fetchData = async () => {
+      setIsLoading(true);
+      setError(null);
       try {
-        let url = '';
-        if (userRole === 'admin') {
-          url = 'http://localhost:3001/api/locales';
-        } else if (userRole === 'encargado' && localId) {
-          url = `http://localhost:3001/api/locales/${localId}`;
-        } else {
-          setFetchedLocalesData(null);
-          setIsLoadingLocales(false);
-          return;
-        }
+        const resLocales = await fetch('http://localhost:3001/api/locales');
+        if (!resLocales.ok) throw new Error(`Error al cargar locales: ${resLocales.statusText}`);
+        const dataLocales: Local[] = await resLocales.json();
+        setLocales(dataLocales.map(l => ({ id: l.id, nombre: l.nombre })));
 
-        const response = await fetch(url);
-        if (!response.ok) {
-          throw new Error(`Error al cargar datos de locales: ${response.statusText}`);
+        let serviciosUrl = 'http://localhost:3001/api/servicios';
+        if (userRole === 'encargado' && authLocalId) {
+          serviciosUrl += `?local_id=${authLocalId}`;
         }
-        const data = await response.json();
-        setFetchedLocalesData(data);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const resServicios = await fetch(serviciosUrl);
+        if (!resServicios.ok) throw new Error(`Error al cargar servicios: ${resServicios.statusText}`);
+        const dataServicios: Servicio[] = await resServicios.json();
+        setServicios(dataServicios);
+
+        let trabajadoresUrl = 'http://localhost:3001/api/trabajadores';
+        if (userRole === 'encargado' && authLocalId) {
+          trabajadoresUrl += `?local_id=${authLocalId}`;
+        }
+        const resTrabajadores = await fetch(trabajadoresUrl);
+        if (!resTrabajadores.ok) throw new Error(`Error al cargar trabajadores: ${resTrabajadores.statusText}`);
+        const dataTrabajadores: Trabajador[] = await resTrabajadores.json();
+        setTrabajadores(dataTrabajadores);
+
       } catch (err: any) {
-        console.error("Error al obtener datos de locales:", err);
-        setErrorLocales("No se pudieron cargar los datos de locales. Inténtalo de nuevo.");
+        console.error("Error fetching data:", err);
+        setError(err.message || "Error al cargar los datos. Por favor, inténtalo de nuevo.");
         toast.error("Error de carga", {
-            description: "No se pudieron obtener los servicios y trabajadores del servidor."
+          description: "No se pudieron obtener los datos del servidor."
         });
       } finally {
-        setIsLoadingLocales(false);
+        setIsLoading(false);
       }
     };
+    fetchData();
+  }, [userRole, authLocalId]);
 
-    fetchLocales();
-  }, [userRole, localId]);
-
-  const { availableServices, availableWorkers } = useMemo(() => {
-    if (isLoadingLocales || errorLocales || !fetchedLocalesData) {
-        return { availableServices: [], availableWorkers: [] };
-    }
-
-    if (userRole === 'admin') {
-      const allLocales = Array.isArray(fetchedLocalesData) ? fetchedLocalesData as Local[] : []; // Asegura que sea un array
-      // CAMBIO CLAVE AQUÍ: Añadir || [] para asegurar que servicios sea un array
-      const allServices = [...new Set(allLocales.flatMap(local => local.servicios || []))];
-      // CAMBIO CLAVE AQUÍ: Añadir || [] para asegurar que trabajadores sea un array
-      // NOTA: 'trabajadores' ya no está en la tabla 'locales'. Deberías obtenerlos de la tabla 'trabajadores'
-      // o pasarlos como prop desde Locales/LocalDetail si se necesitan aquí.
-      // Por ahora, asumiré que ClientIntake NO necesitará todos los trabajadores de todos los locales
-      // si no se los pasa directamente desde Locales.tsx.
-      // Si el userRole es admin y necesita TODOS los trabajadores, tendrías que hacer otra llamada a la API de trabajadores.
-      // Si 'trabajadores' viene de la tabla 'locales' y es null, esto lo manejará.
-      const allWorkers = [...new Set(allLocales.flatMap(local => local.trabajadores || []))]; // Si trabajadores se obtiene de los locales
-
-      return { availableServices: allServices, availableWorkers: allWorkers };
-    }
-    
-    // Si es un encargado de local
-    if (userRole === 'encargado' && localId) {
-      const currentLocal = fetchedLocalesData as Local;
-      if (currentLocal && currentLocal.id === parseInt(localId, 10)) {
-        // CAMBIO CLAVE AQUÍ: Añadir || [] para asegurar que servicios sea un array
-        return {
-          availableServices: currentLocal.servicios || [],
-          availableWorkers: currentLocal.trabajadores || [] // Si trabajadores se obtiene del local específico
-        };
-      }
-    }
-    
-    return { availableServices: [], availableWorkers: [] };
-  }, [userRole, localId, fetchedLocalesData, isLoadingLocales, errorLocales]);
-
-  const handleRegister = () => {
-    if (!servicio) {
-      toast.error("Por favor, selecciona un tipo de servicio.");
-      return;
-    }
-    
-    console.log({ servicio, trabajador: trabajador || "Asignado automáticamente", tipoPago, reseña });
-    toast.success("Cliente registrado exitosamente.", { description: `Servicio de ${servicio} registrado.` });
-
-    setServicio("");
-    setTrabajador("");
-    setTipoPago("efectivo");
-    setReseña("");
-    setIsDrawerOpen(false);
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { id, value } = e.target;
+    setClienteData(prev => ({ ...prev, [id]: value }));
   };
 
+  const handleSelectChange = (id: string, value: string) => {
+    setClienteData(prev => ({ ...prev, [id]: value }));
+    if (id === "localId") {
+      setClienteData(prev => ({ ...prev, servicioId: "", trabajadorId: "any_worker" }));
+    }
+  };
+
+  const availableServicios = useMemo(() => {
+    const currentLocalId = clienteData.localId ? parseInt(clienteData.localId, 10) : null;
+    if (!currentLocalId) return [];
+    return servicios.filter(s => s.local_id === currentLocalId);
+  }, [servicios, clienteData.localId]);
+
+  const availableTrabajadores = useMemo(() => {
+    const currentLocalId = clienteData.localId ? parseInt(clienteData.localId, 10) : null;
+    if (!currentLocalId) return [];
+    
+    let filtered = trabajadores.filter(t => t.local_id === currentLocalId);
+
+    if (clienteData.servicioId) {
+      const selectedServicio = servicios.find(s => s.id === parseInt(clienteData.servicioId, 10));
+      if (selectedServicio) {
+        filtered = filtered.filter(t => (t.servicios || []).includes(selectedServicio.nombre));
+      }
+    }
+    return filtered;
+  }, [trabajadores, servicios, clienteData.localId, clienteData.servicioId]);
+
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!clienteData.nombre || !clienteData.servicioId || !clienteData.localId) {
+      toast.error("Por favor, completa al menos el nombre del cliente, el servicio y el local.");
+      return;
+    }
+    const finalTrabajadorId = clienteData.trabajadorId === "any_worker" ? "" : clienteData.trabajadorId;
+
+    console.log("Datos del cliente para la cita:", { ...clienteData, trabajadorId: finalTrabajadorId });
+    toast.success("Cita agendada", {
+      description: `Cita para ${clienteData.nombre} ${clienteData.apellido || ''} el ${clienteData.fechaCita} a las ${clienteData.horaCita} para el servicio ${servicios.find(s => s.id === parseInt(clienteData.servicioId))?.nombre || ''} en el local ${locales.find(l => l.id === parseInt(clienteData.localId))?.nombre || ''}.`
+    });
+    setClienteData({
+      nombre: "",
+      apellido: "",
+      telefono: "",
+      email: "",
+      fechaCita: initialDate,
+      horaCita: initialTime,
+      servicioId: "",
+      trabajadorId: "any_worker",
+      notas: "",
+      localId: userRole === 'encargado' && authLocalId ? authLocalId.toString() : ""
+    });
+  };
+
+  if (isLoading) {
+    return (
+      <div className="p-6">
+        <h1 className="text-3xl font-bold mb-6">Registro de Citas</h1>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[...Array(6)].map((_, i) => (
+            <Skeleton key={i} className="h-24 w-full" />
+          ))}
+        </div>
+        <Skeleton className="h-10 w-full mt-6" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return <div className="p-6 text-red-500">{error}</div>;
+  }
+
   return (
-    <Drawer open={isDrawerOpen} onOpenChange={setIsDrawerOpen}>
-      <DrawerTrigger asChild>
-        <Button>
-          <UserPlus className="mr-2 h-4 w-4" />
-          Ingreso de Cliente
-        </Button>
-      </DrawerTrigger>
-      <DrawerContent>
-        <div className="mx-auto w-full max-w-2xl">
-          <DrawerHeader>
-            <DrawerTitle>Pasarela de Ingreso de Cliente</DrawerTitle>
-            <DrawerDescription>
-              Completa la información para registrar el servicio del cliente.
-            </DrawerDescription>
-          </DrawerHeader>
-          <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-4">
-                <div className="grid gap-2">
-                    <Label htmlFor="service-type">1. Tipo de Servicio</Label>
-                    <Select value={servicio} onValueChange={setServicio}>
-                      <SelectTrigger id="service-type">
-                          <SelectValue placeholder="Seleccione un servicio..." />
+    <div className="min-h-screen bg-gradient-to-br from-background via-stylepro-lavender-50/30 to-stylepro-blue-50/20">
+      <div className="container mx-auto px-6 py-8 animate-fade-in">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-foreground mb-2">Registro de Citas</h1>
+          <p className="text-muted-foreground">Agenda nuevas citas para tus clientes.</p>
+        </div>
+
+        <Card className="p-6 shadow-lg">
+          <CardHeader>
+            <CardTitle className="text-2xl">Datos del Cliente y Cita</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Sección de Datos del Cliente */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-stylepro-blue-800">Información del Cliente</h3>
+                <div>
+                  <Label htmlFor="nombre">Nombre</Label>
+                  <Input id="nombre" value={clienteData.nombre} onChange={handleInputChange} required />
+                </div>
+                <div>
+                  <Label htmlFor="apellido">Apellido</Label>
+                  <Input id="apellido" value={clienteData.apellido} onChange={handleInputChange} />
+                </div>
+              </div>
+
+              <Separator orientation="vertical" className="hidden md:block" />
+              <Separator orientation="horizontal" className="block md:hidden" />
+
+              {/* Sección de Detalles de la Cita */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-stylepro-lavender-800">Detalles de la Cita</h3>
+                {/* Selector de Local */}
+                <div>
+                  <Label htmlFor="localId">Local</Label>
+                  {userRole === 'admin' ? (
+                    <Select value={clienteData.localId} onValueChange={(value) => handleSelectChange("localId", value)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar local" />
                       </SelectTrigger>
                       <SelectContent>
-                          {isLoadingLocales ? (
-                            <SelectItem value="loading" disabled>Cargando servicios...</SelectItem>
-                          ) : errorLocales ? (
-                            <SelectItem value="error" disabled>Error al cargar</SelectItem>
-                          ) : availableServices.length > 0 ? (
-                            availableServices.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)
-                          ) : (
-                            <SelectItem value="none" disabled>No hay servicios disponibles</SelectItem>
-                          )}
+                        {locales.map(local => (
+                          <SelectItem key={local.id} value={local.id.toString()}>{local.nombre}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
+                  ) : (
+                    <Input
+                      id="localNameDisplay"
+                      value={locales.find(l => l.id.toString() === authLocalId)?.nombre || 'Cargando...'}
+                      disabled
+                    />
+                  )}
                 </div>
 
-                <div className="grid gap-2">
-                    <Label htmlFor="worker">2. ¿Quién lo atenderá?</Label>
-                    <Select value={trabajador} onValueChange={setTrabajador}>
-                      <SelectTrigger id="worker">
-                          <SelectValue placeholder="Seleccione un trabajador..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                          <SelectItem value="any">Asignar trabajador libre</SelectItem>
-                          {isLoadingLocales ? (
-                            <SelectItem value="loading" disabled>Cargando trabajadores...</SelectItem>
-                          ) : errorLocales ? (
-                            <SelectItem value="error" disabled>Error al cargar</SelectItem>
-                          ) : availableWorkers.length > 0 ? (
-                            availableWorkers.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)
-                          ) : (
-                            <SelectItem value="none" disabled>No hay trabajadores disponibles</SelectItem>
-                          )}
-                      </SelectContent>
-                    </Select>
+                {/* Selector de Servicio */}
+                <div>
+                  <Label htmlFor="servicioId">Servicio</Label>
+                  <Select value={clienteData.servicioId} onValueChange={(value) => handleSelectChange("servicioId", value)} disabled={!clienteData.localId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar servicio" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableServicios.length > 0 ? (
+                        availableServicios.map(servicio => (
+                          <SelectItem key={servicio.id} value={servicio.id.toString()}>
+                            {servicio.nombre} (S/{servicio.precio.toFixed(2)})
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <SelectItem value="no-services-available" disabled>No hay servicios disponibles para este local.</SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Selector de Trabajador */}
+                <div>
+                  <Label htmlFor="trabajadorId">Trabajador (Opcional)</Label>
+                  <Select value={clienteData.trabajadorId} onValueChange={(value) => handleSelectChange("trabajadorId", value)} disabled={!clienteData.localId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar trabajador" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="any_worker">Cualquiera</SelectItem>
+                      {availableTrabajadores.length > 0 ? (
+                        availableTrabajadores.map(trabajador => (
+                          <SelectItem key={trabajador.id} value={trabajador.id.toString()}>
+                            {trabajador.nombre} {trabajador.apellido} ({trabajador.especialidad})
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <SelectItem value="no-workers-available" disabled>No hay trabajadores disponibles para este local o servicio.</SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Fecha y Hora Automáticas */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="fechaCita">Fecha de Cita</Label>
+                    <Input id="fechaCita" value={clienteData.fechaCita} type="date" readOnly disabled />
+                  </div>
+                  <div>
+                    <Label htmlFor="horaCita">Hora de Cita</Label>
+                    <Input id="horaCita" value={clienteData.horaCita} type="time" readOnly disabled />
+                  </div>
                 </div>
                 
-                <div className="grid gap-2">
-                    <Label>3. Tipo de Pago</Label>
-                    <RadioGroup value={tipoPago} onValueChange={setTipoPago} className="flex space-x-4">
-                        <div className="flex items-center space-x-2"><RadioGroupItem value="efectivo" id="r1" /><Label htmlFor="r1">Efectivo</Label></div>
-                        <div className="flex items-center space-x-2"><RadioGroupItem value="tarjeta" id="r2" /><Label htmlFor="r2">Tarjeta</Label></div>
-                        <div className="flex items-center space-x-2"><RadioGroupItem value="yape" id="r3" /><Label htmlFor="r3">Yape</Label></div>
-                    </RadioGroup>
+                <div>
+                  <Label htmlFor="notas">Notas Adicionales</Label>
+                  <Input id="notas" value={clienteData.notas} onChange={handleInputChange} />
                 </div>
-            </div>
+              </div>
 
-            <div className="grid gap-2">
-                <Label htmlFor="review">4. Reseña del Cliente (Opcional)</Label>
-                <Textarea id="review" value={reseña} placeholder="El cliente puede dejar una reseña sobre el local y la atención..." className="h-48" onChange={(e) => setReseña(e.target.value)}/>
-            </div>
-          </div>
-          <DrawerFooter className="pt-2 flex-row-reverse">
-            <Button onClick={handleRegister}>Registrar Servicio</Button>
-            <DrawerClose asChild>
-              <Button variant="outline">Cancelar</Button>
-            </DrawerClose>
-          </DrawerFooter>
-        </div>
-      </DrawerContent>
-    </Drawer>
+              <div className="md:col-span-2 mt-6">
+                <Button type="submit" className="w-full bg-stylepro-gold-500 hover:bg-stylepro-gold-600">
+                  Agendar Cita
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
   );
-}
+};
+
+export default ClientIntake;

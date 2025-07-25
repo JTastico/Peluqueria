@@ -16,7 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 
-// --- Componentes internos para los selectores ---
+// --- Componentes internos para los selectores de fecha ---
 const MonthPicker = ({ onSelect }: { onSelect: (date: Date) => void }) => {
   const months = Array.from({ length: 12 }, (_, i) => new Date(2025, i, 1));
   return (
@@ -48,7 +48,7 @@ type TimeRange = 'day' | 'week' | 'month' | 'year';
 
 const COLORS = ['#8B5CF6', '#3B82F6', '#F59E0B', '#10B981'];
 
-// Define la interfaz para Local (debe coincidir con la de tu DB)
+// Definir la interfaz para Local (SIN 'servicios' ni 'trabajadores' directos)
 interface Local {
   id: number;
   type: "peluqueria" | "spa" | "barberia";
@@ -61,20 +61,32 @@ interface Local {
   clientesActivos: number;
   imagen: string;
   estado: "Activo" | "Inactivo";
-  username: string; // Para referencia, no para mostrar
-  password: string; // Para referencia, no para mostrar
-  servicios: string[];
-  trabajadores: string[];
+  username: string;
+  password: string;
+}
+
+// Definir la interfaz para Servicio (para cargar servicios específicos del local)
+interface Servicio {
+  id: number;
+  nombre: string;
+  categoria: string;
+  precio: number;
+  duracion: string;
+  popularidad: number; // Aunque quitamos de Servicios.tsx, si lo usas en LocalDetail
+  ingresosMes: number; // para métricas simuladas, se mantiene en LocalDetail.
+  clientesMes: number; // Lo mismo.
+  descripcion: string;
+  local_id: number;
 }
 
 
 const LocalDetail = () => {
-  // CAMBIO CLAVE AQUÍ: Usar 'localId' para que coincida con la ruta
   const { localId } = useParams<{ localId: string }>();
   const navigate = useNavigate();
-  const { userRole, localId: authLocalId } = useAuth(); // Renombramos para evitar conflicto de nombres
-
+  const { userRole, localId: authLocalId } = useAuth();
+  
   const [local, setLocal] = useState<Local | null>(null);
+  const [serviciosLocal, setServiciosLocal] = useState<Servicio[]>([]); // Estado para servicios del local
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -82,8 +94,7 @@ const LocalDetail = () => {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
   useEffect(() => {
-    const fetchLocalDetail = async () => {
-      // CAMBIO CLAVE AQUÍ: Usar 'localId' para la comprobación
+    const fetchLocalAndServicesDetail = async () => {
       if (!localId) {
         setError("ID de local no proporcionado.");
         setLoading(false);
@@ -93,53 +104,48 @@ const LocalDetail = () => {
       try {
         setLoading(true);
         setError(null);
-        // CAMBIO CLAVE AQUÍ: Usar 'localId' en la URL de fetch
-        const response = await fetch(`http://localhost:3001/api/locales/${localId}`);
-        if (!response.ok) {
-          if (response.status === 404) {
-            throw new Error("Local no encontrado.");
-          }
-          throw new Error(`Error al cargar los detalles del local: ${response.statusText}`);
-        }
-        const data: Local = await response.json();
 
-        // Lógica de autorización: El encargado solo ve su propio local
-        // CAMBIO CLAVE AQUÍ: Usar 'localId' en la comprobación
-        if (userRole === 'encargado' && data.id !== parseInt(authLocalId || '0')) {
+        // 1. Fetch de los detalles del local
+        const resLocal = await fetch(`http://localhost:3001/api/locales/${localId}`);
+        if (!resLocal.ok) {
+          if (resLocal.status === 404) throw new Error("Local no encontrado.");
+          throw new Error(`Error al cargar los detalles del local: ${resLocal.statusText}`);
+        }
+        const dataLocal: Local = await resLocal.json();
+
+        // Lógica de autorización
+        if (userRole === 'encargado' && dataLocal.id !== parseInt(authLocalId || '0')) {
           setError("No tienes permiso para ver este local.");
-          setLocal(null); // No mostrar datos si no hay permiso
-          toast.error("Acceso denegado", {
-            description: "No tienes permiso para ver los detalles de este local."
-          });
-          // Opcional: Redirigir al local del encargado si lo tiene
-          if (authLocalId) {
-            navigate(`/locales/${authLocalId}`);
-          } else {
-            navigate('/locales'); // Redirigir a la lista de locales
-          }
+          setLocal(null);
+          toast.error("Acceso denegado", { description: "No tienes permiso para ver los detalles de este local." });
+          if (authLocalId) { navigate(`/locales/${authLocalId}`); } else { navigate('/locales'); }
           return;
         }
+        setLocal(dataLocal);
 
-        setLocal(data);
+        // 2. Fetch de los servicios específicos de este local
+        const resServicios = await fetch(`http://localhost:3001/api/servicios?local_id=${localId}`);
+        if (!resServicios.ok) throw new Error(`Error al cargar servicios del local: ${resServicios.statusText}`);
+        const dataServicios: Servicio[] = await resServicios.json();
+        setServiciosLocal(dataServicios);
+
+
       } catch (err: any) {
-        console.error("Error fetching local details:", err);
-        setError(err.message || "Error al cargar los detalles del local.");
-        toast.error("Error al cargar detalles del local", {
-          description: err.message || "No se pudieron obtener los datos del local."
-        });
+        console.error("Error fetching local and services details:", err);
+        setError(err.message || "Error al cargar los detalles del local y sus servicios.");
+        toast.error("Error de carga", { description: err.message || "No se pudieron obtener los datos del local y sus servicios." });
       } finally {
         setLoading(false);
       }
     };
 
-    // CAMBIO CLAVE AQUÍ: Asegúrate de que localId sea una dependencia
-    fetchLocalDetail();
-  }, [localId, userRole, authLocalId, navigate]); // Dependencias del useEffect
+    fetchLocalAndServicesDetail();
+  }, [localId, userRole, authLocalId, navigate]);
 
-  // Usamos useMemo para generar datos simulados basados en el local fetched
+
+  // Usamos useMemo para generar datos simulados basados en el local y sus servicios
   const { chartData, metrics } = useMemo(() => {
-    // Si no hay local o está cargando, devuelve datos vacíos o de carga.
-    if (!local || loading) {
+    if (!local || loading || serviciosLocal.length === 0) { // Ahora depende de serviciosLocal
         return {
             chartData: { tendencia: [], distribucion: [] },
             metrics: { income: 0, services: 0, clients: 0, topWorkerName: 'Cargando...', topWorkerServices: 0, topServiceName: 'Cargando...', topServiceCount: 0 }
@@ -147,30 +153,23 @@ const LocalDetail = () => {
     }
 
     const generateData = (factor: number, count: number, labelPrefix: string) => {
-        // Usar los servicios y trabajadores REALES del local
-        const currentLocalServices = local.servicios || [];
-        const currentLocalWorkers = local.trabajadores || [];
+        const currentLocalServices = serviciosLocal.map(s => s.nombre);
 
         const trend = Array.from({ length: count }, (_, i) => ({
             name: `${labelPrefix}${i + 1}`,
-            Ingresos: Math.floor(Math.random() * 800 * factor) + 200 * factor, // Basado en el local actual
+            Ingresos: Math.floor(Math.random() * 800 * factor) + 200 * factor * (parseInt(localId || '1') || 1), // Usar localId en parseInt
         }));
 
         const totalIncome = trend.reduce((sum, item) => sum + item.Ingresos, 0);
         const totalServices = Math.floor(totalIncome / (40 * factor + 10));
         
-        // Asignación de valores simulados a servicios y trabajadores REALES
         const serviceDistribution = currentLocalServices.map(s => ({
             name: s,
-            value: Math.floor(Math.random() * totalServices)
+            value: Math.floor(Math.random() * totalServices / currentLocalServices.length) + 1
         }));
-        const workerDistribution = currentLocalWorkers.map(w => ({
-            name: w,
-            value: Math.floor(Math.random() * totalServices)
-        }));
-        
         const topService = [...serviceDistribution].sort((a,b) => b.value - a.value)[0] || { name: 'N/A', value: 0};
-        const topWorker = [...workerDistribution].sort((a,b) => b.value - a.value)[0] || { name: 'N/A', value: 0};
+        const topWorker = { name: 'Trabajador Genérico', value: Math.floor(totalServices * 0.3) };
+
 
         return {
             tendencia: trend,
@@ -196,7 +195,7 @@ const LocalDetail = () => {
         default: generatedData = { tendencia: [], distribucion: [], metrics: { income: 0, services: 0, clients: 0, topWorkerName: 'N/A', topWorkerServices: 0, topServiceName: 'N/A', topServiceCount: 0 } };
     }
     return { chartData: generatedData, metrics: generatedData.metrics };
-  }, [local, loading, timeRange, selectedDate]); // Dependencias: local (el objeto completo), loading
+  }, [local, loading, serviciosLocal, timeRange, selectedDate, localId]);
 
   if (loading) {
     return (
@@ -231,7 +230,6 @@ const LocalDetail = () => {
   }
 
   if (!local) {
-    // Esto podría pasar si el error fue "No tienes permiso" y local se puso a null
     return <div className="p-6 text-muted-foreground">Local no disponible o acceso denegado.</div>;
   }
 
