@@ -16,9 +16,9 @@ let pool; // Pool de conexiones a la base de datos
 
 // Datos iniciales de locales
 const initialLocalesData = [
-  { id: 1, type: "barberia", nombre: "Barberia Koko", direccion: "Av. Principal 123, Centro", telefono: "+52 55 1234-5678", horario: "Lun-Sab 9:00-20:00", peluqueros: 5, ingresosMes: 85000, clientesActivos: 142, imagen: "https://images.unsplash.com/photo-1560066984-138dadb4c035?w=300&h=200&fit=crop", estado: "Activo", username: "barberia", password: "barberia", servicios: ["Corte Clásico", "Afeitado con Toalla Caliente", "Diseño de Barba", "Tratamiento Capilar"] },
-  { id: 2, type: "peluqueria", nombre: "Peluqueria Koko", direccion: "Blvd. Norte 456, Zona Norte", telefono: "+52 55 2345-6789", horario: "Lun-Dom 8:00-21:00", peluqueros: 7, ingresosMes: 92000, clientesActivos: 186, imagen: "https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=300&h=200&fit=crop", estado: "Activo", username: "peluqueria", password: "peluqueria", servicios: ["Corte de Dama", "Tinte y Mechas", "Peinado para Eventos", "Manicura y Pedicura"] },
-  { id: 3, type: "spa", nombre: "Spa Koko", direccion: "Col. Sur 789, Zona Sur", telefono: "+52 55 3456-7890", horario: "Lun-Sab 10:00-19:00", peluqueros: 4, ingresosMes: 67000, clientesActivos: 98, imagen: "https://images.unsplash.com/photo-1521590832167-7bcbfaa6381f?w=300&h=200&fit=fit", estado: "Activo", username: "spa", password: "spa", servicios: ["Masaje Relajante", "Limpieza Facial Profunda", "Exfoliación Corporal", "Aromaterapia"] }
+  { id: 1, type: "barberia", nombre: "Barberia Koko", direccion: "Av. Principal 123, Centro", telefono: "+52 55 1234-5678", horario: "Lun-Sab 9:00-20:00", peluqueros: 5, ingresosMes: 85000, clientesActivos: 142, imagen: "https://images.unsplash.com/photo-1560066984-138dadb4c035?w=300&h=200&fit=crop", estado: "Activo", username: "barberia", password: "barberia" },
+  { id: 2, type: "peluqueria", nombre: "Peluqueria Koko", direccion: "Blvd. Norte 456, Zona Norte", telefono: "+52 55 2345-6789", horario: "Lun-Dom 8:00-21:00", peluqueros: 7, ingresosMes: 92000, clientesActivos: 186, imagen: "https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=300&h=200&fit=crop", estado: "Activo", username: "peluqueria", password: "peluqueria" },
+  { id: 3, type: "spa", nombre: "Spa Koko", direccion: "Col. Sur 789, Zona Sur", telefono: "+52 55 3456-7890", horario: "Lun-Sab 10:00-19:00", peluqueros: 4, ingresosMes: 67000, clientesActivos: 98, imagen: "https://images.unsplash.com/photo-1521590832167-7bcbfaa6381f?w=300&h=200&fit=fit", estado: "Activo", username: "spa", password: "spa" }
 ];
 
 // Datos iniciales para la tabla 'trabajadores' (con nuevos campos)
@@ -28,6 +28,22 @@ const initialTrabajadoresData = [
     { id: 3, nombre: "Ana", apellido: "Rodríguez", edad: 28, dni: "13579246C", telefono: "+52 55 3333-3333", nacionalidad: "Mexicana", estado_civil: "Soltera", fecha_ingreso: "2019-01-10", nivel_estudios: "Técnico", experiencia: 6, cantidad_hijos: 0, especialidad: "Estilismo Avanzado", rating: 4.7, clientesAtendidos: 896, ingresosMes: 24000, foto: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face", servicios: ["Peinados", "Ondulado", "Alisado", "Eventos"], local_id: 1 },
     { id: 4, nombre: "Roberto", apellido: "Silva", edad: 35, dni: "24680135D", telefono: "+52 55 4444-4444", nacionalidad: "Peruana", estado_civil: "Casado", fecha_ingreso: "2021-09-01", nivel_estudios: "Bachillerato", experiencia: 4, cantidad_hijos: 1, especialidad: "Corte Moderno", rating: 4.6, clientesAtendidos: 672, ingresosMes: 21000, foto: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face", servicios: ["Corte Fade", "Undercut", "Pompadour", "Texturizado"], local_id: 3 },
     { id: 5, nombre: "Laura", apellido: "Jiménez", edad: 40, dni: "98765432E", telefono: "+52 55 5555-5555", nacionalidad: "Española", estado_civil: "Divorciada", fecha_ingreso: "2015-02-20", nivel_estudios: "Doctorado", experiencia: 10, cantidad_hijos: 3, especialidad: "Color Especialista", rating: 4.9, clientesAtendidos: 1432, ingresosMes: 30000, foto: "https://images.unsplash.com/photo-1494790108755-2616b612b786?w=150&h=150&fit=crop&crop=face", servicios: ["Balayage", "Highlights", "Color Fantasy", "Corrección"], local_id: 2 }
+];
+
+// Datos iniciales para la tabla 'servicios' (SIN popularidad, ingresosMes, clientesMes)
+const initialServiciosData = [
+  // Servicios para Barberia Koko (local_id: 1)
+  { id: 101, nombre: "Corte Masculino Clásico", categoria: "Corte", precio: 25.00, duracion: "30 min", descripcion: "Corte de cabello tradicional para hombres.", local_id: 1 },
+  { id: 102, nombre: "Afeitado con Toalla Caliente", categoria: "Barbería", precio: 20.00, duracion: "25 min", descripcion: "Afeitado tradicional con toalla caliente y productos post-afeitado.", local_id: 1 },
+  { id: 103, nombre: "Diseño de Barba y Bigote", categoria: "Barbería", precio: 18.00, duracion: "20 min", descripcion: "Perfilado y diseño profesional de barba y bigote.", local_id: 1 },
+  // Servicios para Peluqueria Koko (local_id: 2)
+  { id: 201, nombre: "Corte Femenino Moderno", categoria: "Corte", precio: 35.00, duracion: "45 min", descripcion: "Corte de cabello moderno y personalizado para mujeres.", local_id: 2 },
+  { id: 202, nombre: "Coloración Balayage", categoria: "Color", precio: 120.00, duracion: "3 hr", descripcion: "Técnica de coloración Balayage para un look natural.", local_id: 2 },
+  { id: 203, nombre: "Peinado para Fiesta", categoria: "Peinado", precio: 50.00, duracion: "60 min", descripcion: "Peinado elegante y duradero para ocasiones especiales.", local_id: 2 },
+  // Servicios para Spa Koko (local_id: 3)
+  { id: 301, nombre: "Masaje Relajante Completo", categoria: "Masaje", precio: 60.00, duracion: "60 min", descripcion: "Masaje de cuerpo completo para aliviar el estrés.", local_id: 3 },
+  { id: 302, nombre: "Limpieza Facial Profunda", categoria: "Facial", precio: 45.00, duracion: "50 min", descripcion: "Limpieza y purificación profunda de la piel del rostro.", local_id: 3 },
+  { id: 303, nombre: "Manicura y Pedicura Spa", categoria: "Uñas", precio: 30.00, duracion: "75 min", descripcion: "Cuidado completo de manos y pies con tratamientos de spa.", local_id: 3 }
 ];
 
 
@@ -40,7 +56,7 @@ const initializeDatabase = async () => {
         console.log('Conectado a la base de datos MySQL.');
         connection.release();
 
-        // Crear la tabla de usuarios si no existe
+        // Crear la tabla de users
         await pool.query(`
             CREATE TABLE IF NOT EXISTS users (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -61,7 +77,7 @@ const initializeDatabase = async () => {
             console.log('Usuarios por defecto insertados.');
         }
 
-        // Tabla de locales (sin cambios en su esquema)
+        // Crear la tabla de locales (con servicios JSON ELIMINADO)
         await pool.query(`
             CREATE TABLE IF NOT EXISTS locales (
                 id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -76,13 +92,12 @@ const initializeDatabase = async () => {
                 imagen VARCHAR(255),
                 estado VARCHAR(50),
                 username VARCHAR(255),
-                password VARCHAR(255),
-                servicios JSON
+                password VARCHAR(255)
             )
         `);
         console.log('Tabla de locales creada o ya existe.');
 
-        // Tabla de trabajadores (creación con el esquema actualizado)
+        // Crear la tabla de trabajadores (esquema actualizado)
         await pool.query(`
             CREATE TABLE IF NOT EXISTS trabajadores (
                 id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -109,21 +124,39 @@ const initializeDatabase = async () => {
         `);
         console.log('Tabla de trabajadores creada o ya existe.');
 
-        // LÓGICA DE INSERCIÓN INICIAL PARA LOCALES (sin cambios)
-        for (const local of initialLocalesData) {
-            const [existing] = await pool.query('SELECT id FROM locales WHERE id = ?', [local.id]);
-            if (existing.length === 0) {
-                await pool.query(
-                    `INSERT INTO locales (id, type, nombre, direccion, telefono, horario, peluqueros, ingresosMes, clientesActivos, imagen, estado, username, password, servicios)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                    [local.id, local.type, local.nombre, local.direccion, local.telefono, local.horario, local.peluqueros, local.ingresosMes, local.clientesActivos, local.imagen, local.estado, local.username, local.password, JSON.stringify(local.servicios)]
-                );
+        // Crear la tabla de servicios (CON esquema SIN popularidad, ingresosMes, clientesMes)
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS servicios (
+                id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                nombre VARCHAR(255) NOT NULL,
+                categoria VARCHAR(100),
+                precio DECIMAL(10, 2),
+                duracion VARCHAR(50),
+                descripcion TEXT,
+                local_id BIGINT NOT NULL,
+                FOREIGN KEY (local_id) REFERENCES locales(id) ON DELETE CASCADE
+            )
+        `);
+        console.log('Tabla de servicios creada o ya existe.');
+
+
+        // Inserción inicial para locales
+        const [localesRowsCount] = await pool.query("SELECT COUNT(*) as count FROM locales");
+        if (localesRowsCount[0].count === 0) {
+            for (const local of initialLocalesData) {
+                const [existing] = await pool.query('SELECT id FROM locales WHERE id = ?', [local.id]);
+                if (existing.length === 0) {
+                    await pool.query(
+                        `INSERT INTO locales (id, type, nombre, direccion, telefono, horario, peluqueros, ingresosMes, clientesActivos, imagen, estado, username, password)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                        [local.id, local.type, local.nombre, local.direccion, local.telefono, local.horario, local.peluqueros, local.ingresosMes, local.clientesActivos, local.imagen, local.estado, local.username, local.password]
+                    );
+                }
             }
+            console.log('Datos de locales por defecto insertados (o ya existían).');
         }
-        console.log('Datos de locales por defecto insertados en MySQL (o ya existían).');
 
-
-        // Insertar datos de trabajadores si la tabla está vacía (con nuevos campos)
+        // Inserción inicial para trabajadores
         const [trabajadoresRowsCount] = await pool.query("SELECT COUNT(*) as count FROM trabajadores");
         if (trabajadoresRowsCount[0].count === 0) {
             for (const trabajador of initialTrabajadoresData) {
@@ -139,6 +172,24 @@ const initializeDatabase = async () => {
                 }
             }
             console.log('Datos de trabajadores por defecto insertados (o ya existían).');
+        }
+        
+        // Inserción inicial para servicios
+        const [serviciosRowsCount] = await pool.query("SELECT COUNT(*) as count FROM servicios");
+        if (serviciosRowsCount[0].count === 0) {
+            for (const servicio of initialServiciosData) {
+                const [localExists] = await pool.query('SELECT id FROM locales WHERE id = ?', [servicio.local_id]);
+                if (localExists.length > 0) {
+                    await pool.query(
+                        `INSERT INTO servicios (id, nombre, categoria, precio, duracion, descripcion, local_id)
+                         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                        [servicio.id, servicio.nombre, servicio.categoria, servicio.precio, servicio.duracion, servicio.descripcion, servicio.local_id]
+                    );
+                } else {
+                    console.warn(`Advertencia: Local con ID ${servicio.local_id} no encontrado para el servicio ${servicio.nombre}. No se insertará este servicio.`);
+                }
+            }
+            console.log('Datos de servicios por defecto insertados (o ya existían).');
         }
 
     } catch (err) {
