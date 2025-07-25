@@ -1,4 +1,4 @@
-const db = require('../db'); // Asegúrate de que esta línea esté presente y al inicio
+const db = require('../db');
 
 // Función auxiliar para obtener el nombre de la tabla de clientes dinámicamente
 const getClientTableName = async (localId) => {
@@ -47,20 +47,61 @@ exports.createClienteCita = async (req, res, next) => {
     }
 };
 
-// Obtener todos los clientes (filtrados por localId)
+// Obtener todos los clientes (filtrados por localId o todos para admin)
 exports.getAllClientes = async (req, res, next) => {
     try {
-        const { localId } = req.query; 
+        const { localId } = req.query; // Puede ser undefined si es admin
 
-        if (!localId) {
-            return res.status(400).json({ message: 'Se requiere un localId para obtener todos los clientes de un tipo específico.' });
-        }
-
-        const tableName = await getClientTableName(localId);
         const connection = db.getDB(); 
+        let allClients = [];
+
+        if (localId) {
+            // Caso de usuario de local específico
+            const tableName = await getClientTableName(localId);
+            const [rows] = await connection.query(`
+                SELECT 
+                    c.id, c.nombre, c.apellido, c.telefono, c.email, 
+                    c.fecha_cita, c.hora_cita, c.notas, c.estado, c.fecha_creacion,
+                    l.nombre AS local_nombre, s.nombre AS servicio_nombre,
+                    t.nombre AS trabajador_nombre, t.apellido AS trabajador_apellido,
+                    c.local_id, c.servicio_id, c.trabajador_id
+                FROM ${tableName} c
+                JOIN locales l ON c.local_id = l.id
+                LEFT JOIN servicios s ON c.servicio_id = s.id
+                LEFT JOIN trabajadores t ON c.trabajador_id = t.id
+                WHERE c.local_id = ?
+                ORDER BY c.fecha_cita DESC, c.hora_cita DESC
+            `, [localId]);
+            allClients = rows;
+        } else {
+            // Caso de administrador: obtener clientes de todas las tablas
+            const tableNames = ['cliente_spa', 'cliente_barberia', 'cliente_peluqueria'];
+            for (const tableName of tableNames) {
+                const [rows] = await connection.query(`
+                    SELECT 
+                        c.id, c.nombre, c.apellido, c.telefono, c.email, 
+                        c.fecha_cita, c.hora_cita, c.notas, c.estado, c.fecha_creacion,
+                        l.nombre AS local_nombre, s.nombre AS servicio_nombre,
+                        t.nombre AS trabajador_nombre, t.apellido AS trabajador_apellido,
+                        c.local_id, c.servicio_id, c.trabajador_id
+                    FROM ${tableName} c
+                    JOIN locales l ON c.local_id = l.id
+                    LEFT JOIN servicios s ON c.servicio_id = s.id
+                    LEFT JOIN trabajadores t ON c.trabajador_id = t.id
+                    ORDER BY c.fecha_cita DESC, c.hora_cita DESC
+                `);
+                allClients = allClients.concat(rows);
+            }
+        }
         
-        const [rows] = await connection.query(`SELECT * FROM ${tableName} WHERE local_id = ?`, [localId]);
-        res.json(rows);
+        // Formatear fechas y horas
+        const formattedClients = allClients.map(row => ({
+            ...row,
+            fecha_cita: row.fecha_cita ? new Date(row.fecha_cita).toISOString().split('T')[0] : null,
+            hora_cita: row.hora_cita ? String(row.hora_cita).substring(0, 5) : null
+        }));
+
+        res.json(formattedClients);
     } catch (error) {
         console.error('Error al obtener clientes:', error);
         next(error);

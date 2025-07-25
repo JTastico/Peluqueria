@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { Calendar, User, MapPin, Scissors, Clock as ClockIcon, Award } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Trash2 } from "lucide-react";
-import { useAuth } from '@/hooks/useAuth'; // Importar useAuth
+import { useAuth } from '@/hooks/useAuth'; 
 
 
 // Definir la interfaz para un Cliente/Cita (debe coincidir con el backend)
@@ -17,23 +17,26 @@ interface ClienteCita {
   id: number;
   nombre: string;
   apellido?: string;
+  telefono?: string; // Añadido si el backend lo retorna
+  email?: string;     // Añadido si el backend lo retorna
   fecha_cita: string; // Formato YYYY-MM-DD
   hora_cita: string;   // Formato HH:MM
-  servicio_id: number;
-  trabajador_id?: number;
-  local_id: number;
+  servicio_id: number; // ID raw del servicio
+  trabajador_id?: number; // ID raw del trabajador
+  local_id: number; // ID raw del local
   notas?: string;
-  fecha_registro: string; // TIMESTAMP
-  
+  fecha_creacion: string; // Corregido: 'fecha_registro' a 'fecha_creacion' para coincidir con la DB
+
   // Campos de JOIN para mostrar nombres
   local_nombre: string;
   servicio_nombre: string;
   trabajador_nombre?: string;
   trabajador_apellido?: string;
+  estado?: string; // Añadido si el backend lo retorna (ej. 'pendiente', 'completado')
 }
 
 const Clientes = () => {
-  const { userRole, localId: authLocalId } = useAuth(); // Obtener userRole y authLocalId
+  const { userRole, localId: authLocalId } = useAuth(); 
 
   const [clientes, setClientes] = useState<ClienteCita[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -45,10 +48,11 @@ const Clientes = () => {
       setError(null);
       try {
         let clientesUrl = 'http://localhost:3001/api/clientes';
-        // CAMBIO CLAVE AQUÍ: Filtrar por local_id si el usuario es encargado
+        // CORRECCIÓN CLAVE: Usar 'localId' (camelCase) para el parámetro de consulta
         if (userRole === 'encargado' && authLocalId) {
-            clientesUrl += `?local_id=${authLocalId}`;
+            clientesUrl += `?localId=${authLocalId}`; 
         }
+        // Si es 'admin', no se añade localId, y el backend devolverá todos los clientes
 
         const response = await fetch(clientesUrl);
         if (!response.ok) {
@@ -67,11 +71,16 @@ const Clientes = () => {
       }
     };
     fetchClientes();
-  }, [userRole, authLocalId]); // Re-ejecutar si el rol o localId cambian
+  }, [userRole, authLocalId]); 
 
-  const handleDelete = async (idToDelete: number) => {
+  // CORRECCIÓN: handleDelete ahora recibe también el localId del cliente a eliminar
+  const handleDelete = async (idToDelete: number, clientLocalId: number) => {
     try {
-      const response = await fetch(`http://localhost:3001/api/clientes/${idToDelete}`, {
+      // El backend requiere el localId para saber de qué tabla específica eliminar.
+      // Se lo pasamos desde el cliente que se está eliminando.
+      const deleteUrl = `http://localhost:3001/api/clientes/${idToDelete}?localId=${clientLocalId}`;
+
+      const response = await fetch(deleteUrl, {
         method: 'DELETE',
       });
       if (!response.ok) {
@@ -102,7 +111,12 @@ const Clientes = () => {
   }
 
   if (error) {
-    return <div className="p-6 text-red-500">{error}</div>;
+    return (
+      <div className="p-6">
+        <h1 className="text-3xl font-bold mb-6">Clientes y Citas</h1>
+        <div className="text-red-500">{error}</div>
+      </div>
+    );
   }
 
   return (
@@ -125,7 +139,8 @@ const Clientes = () => {
                       size="sm" 
                       variant="destructive"
                       className="h-8 w-8 p-0"
-                      onClick={(e) => { e.stopPropagation(); handleDelete(cliente.id); }}
+                      // CORRECCIÓN: Pasar cliente.local_id a handleDelete
+                      onClick={(e) => { e.stopPropagation(); handleDelete(cliente.id, cliente.local_id); }}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -134,7 +149,7 @@ const Clientes = () => {
                     <User className="h-5 w-5" /> {cliente.nombre} {cliente.apellido}
                   </CardTitle>
                   <p className="text-sm text-muted-foreground">
-                    Cita registrada el: {format(new Date(cliente.fecha_registro), 'dd/MM/yyyy HH:mm', { locale: es })}
+                    Cita registrada el: {format(new Date(cliente.fecha_creacion), 'dd/MM/yyyy HH:mm', { locale: es })}
                   </p>
                 </CardHeader>
                 <CardContent className="space-y-3">

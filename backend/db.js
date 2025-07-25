@@ -173,8 +173,8 @@ async function connectDB() {
         if (users[0].count === 0) {
             await connection.execute(
                 `INSERT INTO users (username, password, role) VALUES (?, ?, ?);`,
-                ['admin', 'admin', 'admin'] // Contraseña "admin" en texto plano
-            ); 
+                ['admin', 'admin', 'admin']
+            );
             console.log('Usuario admin inicial creado.');
         }
         
