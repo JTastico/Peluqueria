@@ -2,15 +2,16 @@ const db = require('../db');
 
 // Función auxiliar para obtener el nombre de la tabla de clientes dinámicamente
 const getClientTableName = async (localId) => {
-    const connection = db.getDB(); 
+    const connection = db.getDB();
     if (!connection) {
         throw new Error('No hay conexión a la base de datos.');
     }
-    const [rows] = await connection.query('SELECT tipo_local FROM locales WHERE id = ?', [localId]);
+    // Usar 'type' de la tabla locales
+    const [rows] = await connection.query('SELECT type FROM locales WHERE id = ?', [localId]);
     if (rows.length === 0) {
         throw new Error('Local no encontrado para determinar la tabla de clientes.');
     }
-    const tipoLocal = rows[0].tipo_local;
+    const tipoLocal = rows[0].type;
     switch (tipoLocal) {
         case 'spa':
             return 'cliente_spa';
@@ -26,18 +27,21 @@ const getClientTableName = async (localId) => {
 // Crear una nueva cita/cliente
 exports.createClienteCita = async (req, res, next) => {
     try {
-        const { nombre, apellido, telefono, email, fechaCita, horaCita, servicioId, trabajadorId, localId, notas } = req.body;
+        // REMOVIDO: telefono, email del destructuring del body
+        const { nombre, apellido, fechaCita, horaCita, servicioId, trabajadorId, localId, notas } = req.body;
 
-        if (!localId) {
-            return res.status(400).json({ message: 'Se requiere el ID del local para registrar el cliente.' });
+        if (!nombre || !fechaCita || !horaCita || !servicioId || !localId) {
+            return res.status(400).json({ message: 'Nombre, fecha, hora, servicio y local son obligatorios para la cita.' });
         }
 
         const tableName = await getClientTableName(localId);
-        const connection = db.getDB(); 
-        
+        const connection = db.getDB();
+
         const [result] = await connection.query(
-            `INSERT INTO ${tableName} (nombre, apellido, telefono, email, fecha_cita, hora_cita, servicio_id, trabajador_id, local_id, notas) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [nombre, apellido || null, telefono || null, email || null, fechaCita, horaCita, servicioId, trabajadorId || null, localId, notas || null]
+            // REMOVIDO: telefono, email de la lista de columnas para INSERT
+            `INSERT INTO ${tableName} (nombre, apellido, fecha_cita, hora_cita, servicio_id, trabajador_id, local_id, notas) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            // REMOVIDO: telefono, email de los valores a insertar
+            [nombre, apellido || null, fechaCita, horaCita, servicioId, trabajadorId || null, localId, notas || null]
         );
 
         res.status(201).json({ id: result.insertId, message: 'Cliente registrado exitosamente en ' + tableName });
@@ -50,18 +54,21 @@ exports.createClienteCita = async (req, res, next) => {
 // Obtener todos los clientes (filtrados por localId o todos para admin)
 exports.getAllClientes = async (req, res, next) => {
     try {
-        const { localId } = req.query; // Puede ser undefined si es admin
+        const { localId } = req.query;
 
-        const connection = db.getDB(); 
+        const connection = db.getDB();
         let allClients = [];
 
         if (localId) {
             // Caso de usuario de local específico
             const tableName = await getClientTableName(localId);
+
+            console.log(`Buscando clientes para localId: ${localId} en la tabla: ${tableName}`);
+
             const [rows] = await connection.query(`
-                SELECT 
-                    c.id, c.nombre, c.apellido, c.telefono, c.email, 
-                    c.fecha_cita, c.hora_cita, c.notas, c.estado, c.fecha_creacion,
+                SELECT
+                    c.id, c.nombre, c.apellido,
+                    c.fecha_cita, c.hora_cita, c.notas, c.fecha_creacion,
                     l.nombre AS local_nombre, s.nombre AS servicio_nombre,
                     t.nombre AS trabajador_nombre, t.apellido AS trabajador_apellido,
                     c.local_id, c.servicio_id, c.trabajador_id
@@ -78,9 +85,9 @@ exports.getAllClientes = async (req, res, next) => {
             const tableNames = ['cliente_spa', 'cliente_barberia', 'cliente_peluqueria'];
             for (const tableName of tableNames) {
                 const [rows] = await connection.query(`
-                    SELECT 
-                        c.id, c.nombre, c.apellido, c.telefono, c.email, 
-                        c.fecha_cita, c.hora_cita, c.notas, c.estado, c.fecha_creacion,
+                    SELECT
+                        c.id, c.nombre, c.apellido,
+                        c.fecha_cita, c.hora_cita, c.notas, c.fecha_creacion,
                         l.nombre AS local_nombre, s.nombre AS servicio_nombre,
                         t.nombre AS trabajador_nombre, t.apellido AS trabajador_apellido,
                         c.local_id, c.servicio_id, c.trabajador_id
@@ -93,7 +100,7 @@ exports.getAllClientes = async (req, res, next) => {
                 allClients = allClients.concat(rows);
             }
         }
-        
+
         // Formatear fechas y horas
         const formattedClients = allClients.map(row => ({
             ...row,
@@ -112,14 +119,14 @@ exports.getAllClientes = async (req, res, next) => {
 exports.getClienteById = async (req, res, next) => {
     try {
         const { id } = req.params;
-        const { localId } = req.query; 
+        const { localId } = req.query;
 
         if (!localId) {
             return res.status(400).json({ message: 'Se requiere localId para obtener un cliente por ID.' });
         }
 
         const tableName = await getClientTableName(localId);
-        const connection = db.getDB(); 
+        const connection = db.getDB();
 
         const [rows] = await connection.query(`SELECT * FROM ${tableName} WHERE id = ? AND local_id = ?`, [id, localId]);
         if (rows.length === 0) {
@@ -136,14 +143,14 @@ exports.getClienteById = async (req, res, next) => {
 exports.updateCliente = async (req, res, next) => {
     try {
         const { id } = req.params;
-        const { localId, ...updateData } = req.body; 
+        const { localId, ...updateData } = req.body;
 
         if (!localId) {
             return res.status(400).json({ message: 'Se requiere localId para actualizar el cliente.' });
         }
 
         const tableName = await getClientTableName(localId);
-        const connection = db.getDB(); 
+        const connection = db.getDB();
 
         const fields = Object.keys(updateData).map(key => `${key} = ?`).join(', ');
         const values = Object.values(updateData);
@@ -168,14 +175,14 @@ exports.updateCliente = async (req, res, next) => {
 exports.deleteCliente = async (req, res, next) => {
     try {
         const { id } = req.params;
-        const { localId } = req.query; 
+        const { localId } = req.query;
 
         if (!localId) {
             return res.status(400).json({ message: 'Se requiere localId para eliminar el cliente.' });
         }
 
         const tableName = await getClientTableName(localId);
-        const connection = db.getDB(); 
+        const connection = db.getDB();
 
         const [result] = await connection.query(`DELETE FROM ${tableName} WHERE id = ? AND local_id = ?`, [id, localId]);
 
