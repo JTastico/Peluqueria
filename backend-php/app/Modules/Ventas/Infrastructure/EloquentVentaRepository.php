@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Ventas\Infrastructure;
 
-use App\Core\Support\Alcance;
+use App\Core\Alcance;
 use App\Models\Venta;
 use App\Models\VentaItem;
 use App\Modules\Ventas\Domain\VentaRepository;

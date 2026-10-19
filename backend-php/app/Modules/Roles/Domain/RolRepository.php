@@ -4,11 +4,12 @@ declare(strict_types=1);
 
 namespace App\Modules\Roles\Domain;
 
-use App\Core\Contracts\ConsultaRoles;
-
 /** Puerto de persistencia de roles y sus permisos. */
-interface RolRepository extends ConsultaRoles
+interface RolRepository
 {
+    /** Rol con sus permisos (lo usa cada petición autenticada). @return array{id:string,nombre:string,alcance:string,permisos:list<string>}|null */
+    public function obtener(string $rolId): ?array;
+
     /** @return list<array{id:string,nombre:string,descripcion:string,alcance:string,es_sistema:bool,usuarios:int,permisos:list<string>}> */
     public function todos(): array;
 

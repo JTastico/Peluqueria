@@ -1,32 +1,84 @@
 # API de Peluquería (Laravel · PHP)
 
-Backend independiente del frontend (otro dominio). Arquitectura **hexagonal ligera**: cada módulo
-tiene solo tres carpetas y las dependencias apuntan siempre hacia el dominio.
+Backend independiente del frontend (otro dominio), con **arquitectura hexagonal ligera**.
+
+## La regla: cada módulo tiene 3 capas
+
+| Capa | Pregunta que responde | Qué contiene | Depende de |
+|---|---|---|---|
+| `Domain/` | **¿Qué es?** | Reglas puras del negocio y el **puerto** (interfaz del repositorio) | nada |
+| `Application/` | **¿Qué hace?** | Un **servicio** con los casos de uso del módulo | `Domain/` |
+| `Infrastructure/` | **¿Con qué?** | Controlador, validaciones y repositorio Eloquent (los **adaptadores**) | `Application/` y `Domain/` |
+
+Y una convención fija: **1 módulo = 1 servicio + 1 controlador + 1 repositorio**.
+Si buscas algo de ventas, está en `Modules/Ventas`; si buscas *cómo se reparte* una venta, en `Ventas/Domain/Reparto.php`.
 
 ```
 app/
-├── Core/                       Lo compartido por todos los módulos
-│   ├── Auth/                   AuthUser, CargadorUsuario, JwtTokenIssuer
-│   ├── Contracts/              Puertos del núcleo (TokenIssuer, ConsultaRoles, ConsultaLocales)
-│   ├── Exceptions/ApiException Errores de negocio con su código HTTP
-│   ├── Http/                   Middlewares (JWT, permisos, alcance por local, límites) y ApiRequest
-│   ├── Permisos/Catalogo       Catálogo de permisos y roles base
-│   └── Support/Alcance         "A qué locales llega el usuario" → SQL (un solo sitio)
-├── Models/                     Modelos Eloquent (adaptadores de persistencia)
-├── Modules/<Modulo>/
-│   ├── Domain/                 Reglas puras y PUERTOS (interfaces de repositorio)
-│   ├── Application/            Casos de uso: orquestan el dominio, sin HTTP ni SQL
-│   ├── Infrastructure/         Adaptadores: repositorio Eloquent, controladores, validaciones
-│   └── routes.php              Rutas del módulo
-└── Providers/AppServiceProvider  Raíz de composición: puerto → adaptador (y decoradores de caché)
+├── Core/                       Lo compartido por todos los módulos (no depende de ninguno)
+│   ├── Alcance.php             A qué locales llega un usuario → filtro SQL (un solo sitio)
+│   ├── ApiException.php        Errores de negocio: 400, 401, 403, 404, 409
+│   ├── AuthUser.php            El usuario de la petición: rol, permisos y locales
+│   ├── Permisos.php            Catálogo de permisos y roles base
+│   └── Http/                   ApiRequest (base de validaciones) y middlewares comunes
+├── Models/                     Tablas de la base de datos (Eloquent)
+├── Modules/
+│   └── Ventas/                 ← todos los módulos tienen esta misma forma
+│       ├── Domain/
+│       │   ├── VentaRepository.php       puerto: qué necesita guardar/leer
+│       │   └── Reparto.php               regla pura: trabajador / local
+│       ├── Application/
+│       │   └── VentasService.php         casos de uso: registrar, listar, anular
+│       ├── Infrastructure/
+│       │   ├── VentasController.php      entrada HTTP
+│       │   ├── VentaRequest.php          validación de la entrada
+│       │   └── EloquentVentaRepository.php  salida: implementa el puerto con MySQL
+│       └── routes.php
+└── Providers/AppServiceProvider.php   conecta cada puerto con su adaptador
 ```
 
-Módulos: Auth, Marca, Locales, Trabajadores, Servicios, Productos, Ventas, Reportes, Configuracion, Roles, Usuarios.
+| Módulo | Servicio | Qué hace |
+|---|---|---|
+| Auth | `AuthService` | Login, usuario de cada petición (JWT), contraseña y preferencias propias |
+| Usuarios | `UsuariosService` | Listar usuarios y cambiarles el rol |
+| Roles | `RolesService` | Roles y sus permisos |
+| Locales | `LocalesService` | Locales con sus cifras del mes |
+| Trabajadores | `TrabajadoresService` | Alta, baja, traslados e historial por local |
+| Servicios | `ServiciosService` | Servicios, precios y porcentaje del trabajador |
+| Productos | `ProductosService` | Inventario y ajustes de stock |
+| Ventas | `VentasService` | Cobrar, listar y anular |
+| Reportes | `ReportesService` | Dashboard, liquidación y detalle de un local |
+| Configuracion | `ConfiguracionService` | Datos del negocio, tema y logo |
 
-**Por qué es SOLID y sin código repetido**
-- Cada caso de uso depende de interfaces (`VentaRepository`, `TokenIssuer`…), no de Eloquent → se puede cambiar la persistencia sin tocar la lógica.
-- El filtro "solo mis locales" vive en `Core/Support/Alcance`; los permisos en `Core/Http/Middleware/RequirePermiso`; la validación en `ApiRequest`. Ninguna consulta ni controlador lo repite.
-- La caché son **decoradores** (`CachedRolRepository`, `CachedLocalRepository`, `CachedConfiguracionRepository`): añaden caché sin modificar el repositorio (abierto/cerrado).
+### Recorrido de una petición: cobrar una venta
+
+```
+POST /api/ventas
+  → Ventas/routes.php                middlewares: auth.jwt (sesión) · permiso:ventas.registrar · local.body
+  → VentaRequest                     valida la entrada (400 si algo no cuadra)
+  → VentasController::store          solo traduce HTTP ⇄ servicio
+  → VentasService::registrar         reglas: servicio del local, trabajador activo, Reparto
+  → VentaRepository (puerto)         la aplicación no sabe que detrás hay MySQL
+  → EloquentVentaRepository          guarda venta + servicios en una transacción
+```
+
+### Dependencias permitidas
+- `Infrastructure → Application → Domain`, nunca al revés.
+- Un módulo puede usar el **puerto** (`Domain/`) de otro módulo, nunca su `Infrastructure/`.
+  Ej.: `VentasService` usa `ServicioRepository` y `TrabajadorRepository`.
+- `Core/` lo puede usar cualquiera; `Core/` no usa ningún módulo.
+
+### Caché sin tocar la lógica
+Roles, lista de locales y configuración se leen en cada petición y casi nunca cambian. Su adaptador
+va envuelto en un **decorador** (`CachedRolRepository`, `CachedLocalRepository`,
+`CachedConfiguracionRepository`) que guarda la lectura y la invalida al escribir. El servicio no se entera.
+
+### Agregar un módulo nuevo (receta)
+1. `Modules/Citas/Domain/CitaRepository.php`: la interfaz con lo que necesitas.
+2. `Modules/Citas/Application/CitasService.php`: los casos de uso, recibiendo el puerto por constructor.
+3. `Modules/Citas/Infrastructure/`: `EloquentCitaRepository`, `CitasController` y sus `*Request`.
+4. `Modules/Citas/routes.php` y añadir `'Citas'` a la lista de `routes/api.php`.
+5. En `AppServiceProvider::ADAPTADORES`: `CitaRepository::class => EloquentCitaRepository::class`.
 
 ## Seguridad
 - JWT HS256 con expiración; el usuario, su rol y permisos se vuelven a leer en cada petición (un usuario borrado o con otro rol surte efecto al instante).

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Ventas\Domain;
 
-use App\Core\Support\Alcance;
+use App\Core\Alcance;
 use Illuminate\Support\Carbon;
 
 /** Puerto de persistencia de ventas (cabecera + servicios cobrados). */

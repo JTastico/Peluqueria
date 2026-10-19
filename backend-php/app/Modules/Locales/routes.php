@@ -1,6 +1,6 @@
 <?php
 
-use App\Modules\Locales\Infrastructure\Http\LocalesController;
+use App\Modules\Locales\Infrastructure\LocalesController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth.jwt')->prefix('locales')->group(function () {

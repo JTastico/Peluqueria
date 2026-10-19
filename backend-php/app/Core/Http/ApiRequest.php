@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Core\Http;
 
-use App\Core\Exceptions\ApiException;
-use App\Core\Support\Alcance;
+use App\Core\ApiException;
+use App\Core\Alcance;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 

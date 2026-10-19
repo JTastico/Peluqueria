@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Servicios\Domain;
 
-use App\Core\Support\Alcance;
+use App\Core\Alcance;
 
 /** Puerto de persistencia de servicios (precio y porcentaje del trabajador, por local). */
 interface ServicioRepository

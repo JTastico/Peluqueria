@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Locales\Infrastructure;
 
-use App\Core\Support\Alcance;
+use App\Core\Alcance;
 use App\Models\Local;
 use App\Models\User;
 use App\Modules\Locales\Domain\LocalRepository;

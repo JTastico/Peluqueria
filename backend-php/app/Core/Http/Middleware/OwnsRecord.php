@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Core\Http\Middleware;
 
-use App\Core\Exceptions\ApiException;
+use App\Core\ApiException;
 use App\Models\Producto;
 use App\Models\Servicio;
 use App\Models\Trabajador;

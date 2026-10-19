@@ -1,6 +1,6 @@
 <?php
 
-use App\Modules\Trabajadores\Infrastructure\Http\TrabajadoresController;
+use App\Modules\Trabajadores\Infrastructure\TrabajadoresController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth.jwt')->prefix('trabajadores')->group(function () {

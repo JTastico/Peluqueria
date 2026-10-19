@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Trabajadores\Domain;
 
-use App\Core\Support\Alcance;
+use App\Core\Alcance;
 
 /** Puerto de persistencia de trabajadores y su historial por local. */
 interface TrabajadorRepository

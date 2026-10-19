@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Servicios\Infrastructure;
 
-use App\Core\Support\Alcance;
+use App\Core\Alcance;
 use App\Models\Servicio;
 use App\Modules\Servicios\Domain\ServicioRepository;
 use Illuminate\Support\Facades\DB;

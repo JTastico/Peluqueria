@@ -2,7 +2,7 @@
 
 namespace Database\Seeders;
 
-use App\Core\Permisos\Catalogo;
+use App\Core\Permisos;
 use App\Models\Rol;
 use App\Models\RolPermiso;
 use Illuminate\Database\Seeder;
@@ -13,7 +13,7 @@ class RolesSeeder extends Seeder
 {
     public function run(): void
     {
-        foreach (Catalogo::rolesBase() as $rol) {
+        foreach (Permisos::rolesBase() as $rol) {
             $creado = Rol::query()->firstOrCreate(['id' => $rol['id']], [
                 'nombre' => $rol['nombre'], 'descripcion' => $rol['descripcion'],
                 'alcance' => $rol['alcance'], 'es_sistema' => $rol['es_sistema'],
@@ -23,7 +23,7 @@ class RolesSeeder extends Seeder
             }
         }
         // El administrador siempre tiene todos los permisos del catálogo (incluidos los nuevos)
-        RolPermiso::query()->insertOrIgnore(array_map(fn ($p) => ['rol_id' => 'admin', 'permiso' => $p], Catalogo::ids()));
+        RolPermiso::query()->insertOrIgnore(array_map(fn ($p) => ['rol_id' => 'admin', 'permiso' => $p], Permisos::ids()));
         Cache::forget('rol.admin');
         Cache::forget('rol.encargado');
     }

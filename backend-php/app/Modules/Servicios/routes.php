@@ -1,6 +1,6 @@
 <?php
 
-use App\Modules\Servicios\Infrastructure\Http\ServiciosController;
+use App\Modules\Servicios\Infrastructure\ServiciosController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth.jwt')->prefix('servicios')->group(function () {

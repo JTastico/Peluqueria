@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Trabajadores\Infrastructure;
 
-use App\Core\Support\Alcance;
+use App\Core\Alcance;
 use App\Models\Trabajador;
 use App\Models\TrabajadorLocal;
 use App\Models\TrabajadorMovimiento;
@@ -76,8 +76,13 @@ final class EloquentTrabajadorRepository implements TrabajadorRepository
 
     public function cambiarEstado(string $id, string $localId, string $estado): bool
     {
-        return TrabajadorLocal::query()->where('trabajador_id', $id)->where('local_id', $localId)
-            ->update(['estado' => $estado, 'actualizado' => now()]) > 0;
+        // Se comprueba que exista: MySQL cuenta 0 filas "cambiadas" si el estado ya era ese
+        $asignacion = TrabajadorLocal::query()->where('trabajador_id', $id)->where('local_id', $localId);
+        if (! $asignacion->exists()) {
+            return false;
+        }
+        $asignacion->update(['estado' => $estado, 'actualizado' => now()]);
+        return true;
     }
 
     public function historial(string $id, Alcance $alcance): ?array

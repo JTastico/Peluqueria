@@ -1,6 +1,6 @@
 <?php
 
-use App\Modules\Usuarios\Infrastructure\Http\UsuariosController;
+use App\Modules\Usuarios\Infrastructure\UsuariosController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth.jwt', 'permiso:usuarios.administrar'])->prefix('usuarios')->group(function () {

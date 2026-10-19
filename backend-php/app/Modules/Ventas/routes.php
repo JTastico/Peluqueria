@@ -1,6 +1,6 @@
 <?php
 
-use App\Modules\Ventas\Infrastructure\Http\VentasController;
+use App\Modules\Ventas\Infrastructure\VentasController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth.jwt')->prefix('ventas')->group(function () {

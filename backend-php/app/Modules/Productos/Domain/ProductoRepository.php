@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Productos\Domain;
 
-use App\Core\Support\Alcance;
+use App\Core\Alcance;
 
 /** Puerto de persistencia del inventario por local. */
 interface ProductoRepository

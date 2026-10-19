@@ -1,6 +1,6 @@
 <?php
 
-use App\Modules\Roles\Infrastructure\Http\RolesController;
+use App\Modules\Roles\Infrastructure\RolesController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth.jwt', 'permiso:usuarios.administrar'])->prefix('roles')->group(function () {

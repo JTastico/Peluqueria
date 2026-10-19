@@ -2,9 +2,9 @@
 
 namespace Tests\Unit;
 
-use App\Core\Exceptions\ApiException;
-use App\Core\Support\Alcance;
-use App\Modules\Marca\Domain\Contraste;
+use App\Core\ApiException;
+use App\Core\Alcance;
+use App\Modules\Configuracion\Domain\Contraste;
 use App\Modules\Productos\Domain\EstadoStock;
 use App\Modules\Reportes\Domain\FiltrosReporte;
 use App\Modules\Roles\Domain\IdRol;

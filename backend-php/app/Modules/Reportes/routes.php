@@ -1,6 +1,6 @@
 <?php
 
-use App\Modules\Reportes\Infrastructure\Http\ReportesController;
+use App\Modules\Reportes\Infrastructure\ReportesController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth.jwt')->prefix('reportes')->group(function () {

@@ -1,7 +1,7 @@
 <?php
 
-use App\Core\Exceptions\ApiException;
-use App\Core\Http\Middleware\AuthenticateJwt;
+use App\Core\ApiException;
+use App\Modules\Auth\Infrastructure\Autenticar;
 use App\Core\Http\Middleware\ConfiarEnProxies;
 use App\Core\Http\Middleware\EnforceBodyLocal;
 use App\Core\Http\Middleware\LimitarTamano;
@@ -28,7 +28,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->append(SecurityHeaders::class);
         $middleware->prepend([ConfiarEnProxies::class, LimitarTamano::class]);
         $middleware->alias([
-            'auth.jwt' => AuthenticateJwt::class,
+            'auth.jwt' => Autenticar::class,
             'permiso' => RequirePermiso::class,
             'alcance' => ResolveLocalScope::class,
             'local.body' => EnforceBodyLocal::class,

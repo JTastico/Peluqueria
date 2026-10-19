@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Core\Http\Middleware;
 
-use App\Core\Exceptions\ApiException;
+use App\Core\ApiException;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;

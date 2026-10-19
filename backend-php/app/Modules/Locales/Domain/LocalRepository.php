@@ -4,12 +4,17 @@ declare(strict_types=1);
 
 namespace App\Modules\Locales\Domain;
 
-use App\Core\Contracts\ConsultaLocales;
-use App\Core\Support\Alcance;
+use App\Core\Alcance;
 
 /** Puerto de persistencia de locales. */
-interface LocalRepository extends ConsultaLocales
+interface LocalRepository
 {
+    /** Lista corta (id, nombre, tipo) de todos los locales. @return list<array{id:string,nombre:string,type:string}> */
+    public function todos(): array;
+
+    /** @param list<string> $ids @return list<array{id:string,nombre:string,type:string}> */
+    public function porIds(array $ids): array;
+
     /** Locales con sus cifras del mes en curso, acotados al alcance. */
     public function resumenes(Alcance $alcance): array;
 

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Productos\Infrastructure;
 
-use App\Core\Support\Alcance;
+use App\Core\Alcance;
 use App\Models\Producto;
 use App\Modules\Productos\Domain\EstadoStock;
 use App\Modules\Productos\Domain\ProductoRepository;

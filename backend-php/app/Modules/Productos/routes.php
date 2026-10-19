@@ -1,6 +1,6 @@
 <?php
 
-use App\Modules\Productos\Infrastructure\Http\ProductosController;
+use App\Modules\Productos\Infrastructure\ProductosController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth.jwt', 'permiso:inventario.administrar'])->prefix('productos')->group(function () {

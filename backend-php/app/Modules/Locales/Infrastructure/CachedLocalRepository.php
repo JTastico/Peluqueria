@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Locales\Infrastructure;
 
-use App\Core\Support\Alcance;
+use App\Core\Alcance;
 use App\Modules\Locales\Domain\LocalRepository;
 use Illuminate\Contracts\Cache\Repository as Cache;
 

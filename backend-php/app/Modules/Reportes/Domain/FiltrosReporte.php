@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Reportes\Domain;
 
-use App\Core\Exceptions\ApiException;
-use App\Core\Support\Alcance;
+use App\Core\ApiException;
+use App\Core\Alcance;
 use DateInterval;
 use DateTimeImmutable;
 
@@ -36,6 +36,19 @@ final class FiltrosReporte
             $hasta ?: $hoy->format('Y-m-d'),
             $horaDesde ?: null, $horaHasta ?: null, $alcance
         );
+    }
+
+    /** Periodo que termina en $fecha: day (ese día), week (7 días), month (30 días) o year (12 meses). */
+    public static function delPeriodo(string $periodo, string $fecha, Alcance $alcance): self
+    {
+        $fin = new DateTimeImmutable($fecha);
+        $inicio = match ($periodo) {
+            'day' => $fin,
+            'week' => $fin->modify('-6 days'),
+            'month' => $fin->modify('-29 days'),
+            'year' => $fin->modify('first day of this month')->modify('-11 months'),
+        };
+        return new self($inicio->format('Y-m-d'), $fin->format('Y-m-d'), null, null, $alcance);
     }
 
     /** Rango [inicio, fin) listo para comparar contra fecha_hora sin envolver la columna en funciones. */
