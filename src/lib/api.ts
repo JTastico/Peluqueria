@@ -1,4 +1,5 @@
-export const API_URL = "http://localhost:3001/api";
+// URL de la API: se define al compilar con VITE_API_URL (ver .env.example)
+export const API_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:8000/api";
 
 const SESSION_KEYS = ["token", "user", "isAuthenticated", "userRole", "username", "localId", "trabajadorId"];
 

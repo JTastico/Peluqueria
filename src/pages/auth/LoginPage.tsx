@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { useAuth } from '@/hooks/useAuth';
 import { useBrand } from '@/hooks/useBrand';
 
+import { API_URL } from "@/lib/api";
 export function LoginPage() {
   const [username, setUsernameInput] = useState('');
   const [password, setPassword] = useState('');
@@ -29,7 +30,7 @@ export function LoginPage() {
 
     try {
       // CAMBIO CLAVE AQUÍ: La URL correcta del endpoint de login en el backend
-      const response = await fetch('http://localhost:3001/api/auth/login', {
+      const response = await fetch(`${API_URL}/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

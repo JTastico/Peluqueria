@@ -18,6 +18,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 
+import { API_URL } from "@/lib/api";
 // --- Componentes internos para los selectores de fecha ---
 const MonthPicker = ({ onSelect }: { onSelect: (date: Date) => void }) => {
   const months = Array.from({ length: 12 }, (_, i) => new Date(2025, i, 1));
@@ -107,7 +108,7 @@ const LocalDetail = () => {
         setError(null);
 
         // 1. Fetch de los detalles del local
-        const resLocal = await fetch(`http://localhost:3001/api/locales/${localId}`);
+        const resLocal = await fetch(`${API_URL}/locales/${localId}`);
         if (!resLocal.ok) {
           if (resLocal.status === 404) throw new Error("Local no encontrado.");
           if (resLocal.status === 403) throw new Error("No tienes acceso a este local.");
@@ -118,7 +119,7 @@ const LocalDetail = () => {
         setLocal(dataLocal);
 
         // 2. Fetch de los servicios específicos de este local
-        const resServicios = await fetch(`http://localhost:3001/api/servicios?local_id=${localId}`);
+        const resServicios = await fetch(`${API_URL}/servicios?local_id=${localId}`);
         if (!resServicios.ok) throw new Error(`Error al cargar servicios del local: ${resServicios.statusText}`);
         const dataServicios: Servicio[] = await resServicios.json();
         setServiciosLocal(dataServicios);
@@ -145,7 +146,7 @@ const LocalDetail = () => {
     if (!localId) return;
     let cancelled = false;
     const fecha = format(selectedDate, 'yyyy-MM-dd');
-    fetch(`http://localhost:3001/api/reportes/local/${localId}?periodo=${timeRange}&fecha=${fecha}`)
+    fetch(`${API_URL}/reportes/local/${localId}?periodo=${timeRange}&fecha=${fecha}`)
       .then(async r => {
         const body = await r.json();
         if (!r.ok) throw new Error(body.message || 'Error al cargar el detalle del local');

@@ -14,6 +14,7 @@ import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 
 
+import { API_URL } from "@/lib/api";
 // Definir la interfaz para Local (AHORA COINCIDE CON LA DB + CAMPOS MAPEADOS DEL BACKEND)
 interface Local {
   id: string;
@@ -62,7 +63,7 @@ const Locales = () => {
       setIsLoadingLocales(true);
       setErrorLocales(null);
       try {
-        const response = await fetch('http://localhost:3001/api/locales');
+        const response = await fetch(`${API_URL}/locales`);
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -97,7 +98,7 @@ const Locales = () => {
 
   const handleDelete = async (idToDelete: string) => {
     try {
-        const response = await fetch(`http://localhost:3001/api/locales/${idToDelete}`, {
+        const response = await fetch(`${API_URL}/locales/${idToDelete}`, {
             method: 'DELETE',
         });
 
@@ -145,7 +146,7 @@ const Locales = () => {
             password, 
         };
 
-        const response = await fetch('http://localhost:3001/api/locales', {
+        const response = await fetch(`${API_URL}/locales`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(newLocalToSend)
