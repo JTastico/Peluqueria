@@ -1,26 +1,25 @@
 // backend/controllers/localesController.js
+const crypto = require('crypto');
+const bcrypt = require('bcrypt');
 const { getDB } = require('../db'); // Ahora getDB devolverá el pool
+const { filtroLocal } = require('../utils/alcance');
+
+// Estadísticas calculadas en vivo desde las ventas del mes en curso.
+const LOCAL_COLUMNS = `
+    l.id, l.nombre, l.type, l.direccion, l.telefono, l.horario, l.imagen, l.estado, l.username,
+    (SELECT COUNT(*) FROM trabajador_locales tl WHERE tl.local_id = l.id AND tl.estado = 'activo') AS peluqueros,
+    (SELECT COALESCE(SUM(v.total), 0) FROM ventas v
+        WHERE v.local_id = l.id AND v.estado = 'activa' AND v.fecha_hora >= DATE_FORMAT(NOW(), '%Y-%m-01')) AS ingresosMes,
+    (SELECT COUNT(*) FROM ventas v
+        WHERE v.local_id = l.id AND v.estado = 'activa' AND v.fecha_hora >= DATE_FORMAT(NOW(), '%Y-%m-01')) AS clientesActivos
+`;
+
 
 exports.getAllLocales = async (req, res, next) => {
     try {
         const pool = getDB(); // Obtener el pool
-        const [rows] = await pool.query(`
-            SELECT 
-                id, 
-                nombre, 
-                type,               -- Usar 'type' si el frontend lo espera (viene del DB 'tipo_local')
-                direccion, 
-                telefono, 
-                horario, 
-                peluqueros,         -- Usar 'peluqueros' si el frontend lo espera (viene del DB 'numero_peluqueros')
-                ingresosMes,        -- Usar 'ingresosMes' si el frontend lo espera (viene del DB 'ingreso_mensual')
-                clientesActivos,    -- Usar 'clientesActivos' si el frontend lo espera (viene del DB 'clientes_activos')
-                imagen,             
-                estado,             
-                username,           -- Estos campos están en la tabla locales de tu DB
-                password            -- Estos campos están en la tabla locales de tu DB
-            FROM locales
-        `);
+        const fl = filtroLocal(req.localScope, 'l.id');
+        const [rows] = await pool.query(`SELECT ${LOCAL_COLUMNS} FROM locales l WHERE ${fl.sql}`, fl.params);
         
         // Mapeo para asegurar que los nombres de las propiedades coinciden con el frontend
         const locales = rows.map(row => ({
@@ -41,24 +40,7 @@ exports.getLocaleById = async (req, res, next) => {
     const { id } = req.params;
     try {
         const pool = getDB(); // Obtener el pool
-        const [rows] = await pool.query(`
-            SELECT 
-                id, 
-                nombre, 
-                type,               
-                direccion, 
-                telefono, 
-                horario, 
-                peluqueros,         
-                ingresosMes,        
-                clientesActivos,    
-                imagen,             
-                estado,             
-                username,           
-                password            
-            FROM locales 
-            WHERE id = ?
-        `, [id]);
+        const [rows] = await pool.query(`SELECT ${LOCAL_COLUMNS} FROM locales l WHERE l.id = ?`, [id]);
         
         if (rows.length === 0) {
             return res.status(404).json({ message: 'Local no encontrado.' });
@@ -84,8 +66,11 @@ exports.createLocale = async (req, res, next) => {
     if (!nombre || !username || !password) {
         return res.status(400).json({ message: 'Nombre, usuario y contraseña del local son obligatorios.' });
     }
+    if (typeof password !== 'string' || password.length < 8 || password.length > 72) {
+        return res.status(400).json({ message: 'La contraseña del encargado debe tener entre 8 y 72 caracteres.' });
+    }
 
-    let newLocalId;
+    const newLocalId = crypto.randomUUID();
 
     try {
         const pool = getDB(); // Obtener el pool
@@ -94,10 +79,11 @@ exports.createLocale = async (req, res, next) => {
 
         try {
             // 1. Insertar el local en la tabla 'locales'
-            const [localResult] = await connection.query(
-                `INSERT INTO locales (nombre, type, direccion, telefono, horario, peluqueros, ingresosMes, clientesActivos, imagen, estado, username, password)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            await connection.query(
+                `INSERT INTO locales (id, nombre, type, direccion, telefono, horario, peluqueros, ingresosMes, clientesActivos, imagen, estado, username, password)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
+                    newLocalId,
                     nombre, 
                     type || 'peluqueria', 
                     direccion || null, 
@@ -108,24 +94,22 @@ exports.createLocale = async (req, res, next) => {
                     clientesActivos || 0,
                     imagen || null,      
                     estado || 'Activo',   
-                    username,           
-                    password            
+                    username,
+                    '' // la contraseña vive (con hash) solo en la tabla users
                 ]
             );
 
-            newLocalId = localResult.insertId;
-
             // 2. Insertar también en la tabla 'users' para el encargado del local
             await connection.query(
-                `INSERT INTO users (username, password, role, local_id)
-                 VALUES (?, ?, ?, ?)`,
-                [username, password, 'encargado', newLocalId]
+                `INSERT INTO users (id, username, password, role, local_id)
+                 VALUES (?, ?, ?, ?, ?)`,
+                [crypto.randomUUID(), username, await bcrypt.hash(password, 10), 'encargado', newLocalId]
             );
 
             await connection.commit(); 
 
             // Recuperar el local completo de la DB para devolverlo al frontend
-            const [newLocalRows] = await pool.query('SELECT * FROM locales WHERE id = ?', [newLocalId]);
+            const [newLocalRows] = await pool.query(`SELECT ${LOCAL_COLUMNS} FROM locales l WHERE l.id = ?`, [newLocalId]);
             const newLocal = {
                 ...newLocalRows[0],
                 type: newLocalRows[0].type || 'peluqueria',
@@ -175,7 +159,7 @@ exports.deleteLocale = async (req, res, next) => {
             await connection.query(`DELETE FROM ${clientTableName} WHERE local_id = ?`, [id]);
             console.log(`Clientes del local ${id} (${clientTableName}) eliminados.`);
 
-            await connection.query('DELETE FROM servicios WHERE local_id = ?', [id]);
+                        await connection.query('DELETE FROM servicios WHERE local_id = ?', [id]);
             console.log(`Servicios del local ${id} eliminados.`);
 
             await connection.query('DELETE FROM trabajadores WHERE local_id = ?', [id]);

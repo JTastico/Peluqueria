@@ -1,272 +1,149 @@
-
-import { useState } from "react";
-import { Calendar, Filter, Download, TrendingUp, DollarSign, Users, Scissors } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+import { Bar, BarChart, CartesianGrid, Legend, Tooltip, XAxis, YAxis } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DatePickerWithRange } from "@/components/ui/date-picker-with-range";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
+import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ReportFilters, ReportFilterValues, defaultReportFilters, filtersToQuery } from "@/components/ReportFilters";
+import { AXIS_PROPS, ChartCard, ChartTooltip, GRID_PROPS, compactMoney, useChartColors, useReducedMotion } from "@/components/charts/ChartKit";
+import { useAuth } from "@/hooks/useAuth";
+import { API_URL, fechaStr, formatMoney, todayStr } from "@/lib/ventas";
 
-const ventasData = [
-  { mes: 'Ene', ventas: 45000, clientes: 234 },
-  { mes: 'Feb', ventas: 52000, clientes: 267 },
-  { mes: 'Mar', ventas: 48000, clientes: 245 },
-  { mes: 'Abr', ventas: 61000, clientes: 298 },
-  { mes: 'May', ventas: 55000, clientes: 276 },
-  { mes: 'Jun', ventas: 67000, clientes: 312 }
+interface Fila {
+  trabajador_id: string; trabajador: string; local_id: string; local_nombre: string; asignacion: string;
+  total: number; comision: number; parte_local: number; servicios: number;
+}
+
+const lunesDe = (d: Date) => { const x = new Date(d); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; };
+const suma = (d: Date, dias: number) => { const x = new Date(d); x.setDate(x.getDate() + dias); return x; };
+
+const PRESETS = [
+  { id: "semana", label: "Esta semana", range: () => ({ desde: fechaStr(lunesDe(new Date())), hasta: todayStr() }) },
+  { id: "semana-pasada", label: "Semana pasada", range: () => { const l = suma(lunesDe(new Date()), -7); return { desde: fechaStr(l), hasta: fechaStr(suma(l, 6)) }; } },
+  { id: "quincena", label: "Últimos 15 días", range: () => ({ desde: fechaStr(suma(new Date(), -14)), hasta: todayStr() }) },
+  { id: "mes", label: "Este mes", range: () => { const n = new Date(); return { desde: fechaStr(new Date(n.getFullYear(), n.getMonth(), 1)), hasta: todayStr() }; } },
+  { id: "mes-pasado", label: "Mes pasado", range: () => { const n = new Date(); return { desde: fechaStr(new Date(n.getFullYear(), n.getMonth() - 1, 1)), hasta: fechaStr(new Date(n.getFullYear(), n.getMonth(), 0)) }; } },
 ];
 
-const peluquerosData = [
-  { nombre: 'María G.', ingresos: 32000, clientes: 145 },
-  { nombre: 'Carlos M.', ingresos: 28000, clientes: 132 },
-  { nombre: 'Ana R.', ingresos: 25000, clientes: 118 },
-  { nombre: 'Roberto S.', ingresos: 22000, clientes: 98 },
-  { nombre: 'Laura J.', ingresos: 30000, clientes: 128 }
-];
-
-const serviciosData = [
-  { name: 'Corte Clásico', value: 35, color: '#8B5CF6' },
-  { name: 'Coloración', value: 25, color: '#06B6D4' },
-  { name: 'Mechas', value: 20, color: '#F59E0B' },
-  { name: 'Peinados', value: 12, color: '#10B981' },
-  { name: 'Otros', value: 8, color: '#EF4444' }
-];
-
-const localesData = [
-  { local: 'Centro', ingresos: 825000, clientes: 234, crecimiento: 12 },
-  { local: 'Norte', ingresos: 92000, clientes: 267, crecimiento: 8 },
-  { local: 'Sur', ingresos: 67000, clientes: 178, crecimiento: 15 }
-];
-
+// Liquidación: lo que vendió cada trabajador, lo que le toca a él y lo que le toca al local.
 const Reportes = () => {
-  const [selectedLocal, setSelectedLocal] = useState("todos");
-  const [selectedPeluquero, setSelectedPeluquero] = useState("todos");
+  const colors = useChartColors();
+  const reduced = useReducedMotion();
+  const { localesPermitidos: locales } = useAuth();
+  const [filters, setFilters] = useState<ReportFilterValues>(() => ({ ...defaultReportFilters(), ...PRESETS[0].range() }));
+  const [filas, setFilas] = useState<Fila[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (filters.desde && filters.hasta && filters.desde > filters.hasta) return;
+    let cancelled = false;
+    setLoading(true);
+    const q = filtersToQuery({ ...filters, hora_desde: "", hora_hasta: "" });
+    fetch(`${API_URL}/reportes/trabajadores?${q}`)
+      .then(async r => { const b = await r.json(); if (!r.ok) throw new Error(b.message || "Error al cargar la liquidación"); return b as Fila[]; })
+      .then(d => !cancelled && setFilas(d))
+      .catch(e => !cancelled && toast.error(e.message))
+      .finally(() => !cancelled && setLoading(false));
+    return () => { cancelled = true; };
+  }, [filters]);
+
+  const presetActivo = PRESETS.find(p => { const r = p.range(); return r.desde === filters.desde && r.hasta === filters.hasta; })?.id;
+
+  const grupos = useMemo(() => {
+    const map = new Map<string, { nombre: string; filas: Fila[] }>();
+    for (const f of filas) {
+      if (!map.has(f.local_id)) map.set(f.local_id, { nombre: f.local_nombre, filas: [] });
+      map.get(f.local_id)!.filas.push(f);
+    }
+    return [...map.values()];
+  }, [filas]);
+
+  const totalAPagar = filas.reduce((a, f) => a + f.comision, 0);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-stylepro-lavender-50/30 to-stylepro-blue-50/20">
-      <div className="container mx-auto px-6 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground mb-2">Reportes y Análisis</h1>
-          <p className="text-muted-foreground">Analiza el rendimiento de tu negocio con datos detallados</p>
-        </div>
+    <div className="p-4 md:p-6 space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">Liquidación</h1>
+        <p className="text-muted-foreground">Cuánto vendió cada trabajador y cuánto le toca, según el porcentaje de cada servicio.</p>
+      </div>
 
-        {/* Filtros */}
-        <Card className="mb-8 border-0 shadow-md">
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Filter className="h-5 w-5" />
-              Filtros de Análisis
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div>
-                <label className="text-sm font-medium mb-2 block">Rango de Fechas</label>
-                <Button variant="outline" className="w-full justify-start">
-                  <Calendar className="h-4 w-4 mr-2" />
-                  Últimos 6 meses
-                </Button>
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-2 block">Local</label>
-                <Select value={selectedLocal} onValueChange={setSelectedLocal}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar local" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="todos">Todos los locales</SelectItem>
-                    <SelectItem value="centro">StylePro Centro</SelectItem>
-                    <SelectItem value="norte">StylePro Norte</SelectItem>
-                    <SelectItem value="sur">StylePro Sur</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-2 block">Peluquero</label>
-                <Select value={selectedPeluquero} onValueChange={setSelectedPeluquero}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar peluquero" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="todos">Todos los peluqueros</SelectItem>
-                    <SelectItem value="maria">María González</SelectItem>
-                    <SelectItem value="carlos">Carlos Mendoza</SelectItem>
-                    <SelectItem value="ana">Ana Rodríguez</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex items-end">
-                <Button className="w-full bg-stylepro-lavender-600 hover:bg-stylepro-lavender-700">
-                  <Download className="h-4 w-4 mr-2" />
-                  Exportar PDF
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      <div role="group" aria-label="Rango rápido" className="inline-flex max-w-full flex-wrap rounded-xl border bg-white p-1 shadow-sm">
+        {PRESETS.map(p => (
+          <button key={p.id} type="button" aria-pressed={presetActivo === p.id} onClick={() => setFilters(f => ({ ...f, ...p.range() }))}
+            className={`min-h-[40px] cursor-pointer rounded-lg px-3.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+              presetActivo === p.id ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}>
+            {p.label}
+          </button>
+        ))}
+      </div>
 
-        {/* KPIs Principales */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <Card className="border-0 shadow-md">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-stylepro-gold-100 rounded-lg">
-                  <DollarSign className="h-6 w-6 text-stylepro-gold-600" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Ingresos Totales</p>
-                  <p className="text-2xl font-bold text-stylepro-gold-600">S/244,000</p>
-                  <p className="text-xs text-green-600 flex items-center gap-1">
-                    <TrendingUp className="h-3 w-3" />
-                    +12% vs mes anterior
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+      <Card className="border border-border/60 shadow-sm">
+        <CardContent className="pt-6"><ReportFilters value={filters} onChange={setFilters} locales={locales} conHoras={false} /></CardContent>
+      </Card>
 
-          <Card className="border-0 shadow-md">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-stylepro-blue-100 rounded-lg">
-                  <Users className="h-6 w-6 text-stylepro-blue-600" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Clientes Atendidos</p>
-                  <p className="text-2xl font-bold text-stylepro-blue-600">679</p>
-                  <p className="text-xs text-green-600 flex items-center gap-1">
-                    <TrendingUp className="h-3 w-3" />
-                    +8% vs mes anterior
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+      {!loading && grupos.length > 0 && (
+        <p className="text-sm text-muted-foreground">Total a pagar a trabajadores en el rango: <strong className="text-foreground tabular-nums">{formatMoney(totalAPagar)}</strong></p>
+      )}
+      {!loading && grupos.length === 0 && <p className="text-muted-foreground">No hay trabajadores para mostrar.</p>}
 
-          <Card className="border-0 shadow-md">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-stylepro-lavender-100 rounded-lg">
-                  <Scissors className="h-6 w-6 text-stylepro-lavender-600" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Servicios Realizados</p>
-                  <p className="text-2xl font-bold text-stylepro-lavender-600">892</p>
-                  <p className="text-xs text-green-600 flex items-center gap-1">
-                    <TrendingUp className="h-3 w-3" />
-                    +15% vs mes anterior
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-0 shadow-md">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-green-100 rounded-lg">
-                  <TrendingUp className="h-6 w-6 text-green-600" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Ticket Promedio</p>
-                  <p className="text-2xl font-bold text-green-600">S/359</p>
-                  <p className="text-xs text-green-600 flex items-center gap-1">
-                    <TrendingUp className="h-3 w-3" />
-                    +5% vs mes anterior
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Gráficos */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          <Card className="border-0 shadow-md">
-            <CardHeader>
-              <CardTitle>Tendencia de Ventas e Ingresos</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={ventasData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="mes" />
-                  <YAxis />
-                  <Tooltip />
-                  <Line type="monotone" dataKey="ventas" stroke="#8B5CF6" strokeWidth={2} />
-                </LineChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
-          <Card className="border-0 shadow-md">
-            <CardHeader>
-              <CardTitle>Distribución de Servicios</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={serviciosData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {serviciosData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
+      <div className={`space-y-6 ${loading ? "opacity-60" : ""}`} aria-busy={loading}>
+        {grupos.map(g => {
+          const tot = g.filas.reduce((a, f) => ({ total: a.total + f.total, comision: a.comision + f.comision, local: a.local + f.parte_local, serv: a.serv + f.servicios }), { total: 0, comision: 0, local: 0, serv: 0 });
+          return (
+            <Card key={g.nombre} className="border border-border/60 shadow-sm">
+              <CardHeader className="pb-2"><CardTitle className="text-lg">{g.nombre}</CardTitle></CardHeader>
+              <CardContent className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Trabajador</TableHead>
+                      <TableHead className="text-right">Servicios</TableHead>
+                      <TableHead className="text-right">Vendió</TableHead>
+                      <TableHead className="text-right">Le toca</TableHead>
+                      <TableHead className="text-right">Local</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {g.filas.map(f => (
+                      <TableRow key={`${f.trabajador_id}-${f.local_id}`}>
+                        <TableCell className="font-medium">
+                          {f.trabajador}
+                          {f.asignacion === "pausado" && <Badge variant="outline" className="ml-2 font-normal">En pausa</Badge>}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">{f.servicios}</TableCell>
+                        <TableCell className="text-right tabular-nums">{formatMoney(f.total)}</TableCell>
+                        <TableCell className="text-right font-semibold tabular-nums text-primary">{formatMoney(f.comision)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{formatMoney(f.parte_local)}</TableCell>
+                      </TableRow>
                     ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </div>
+                  </TableBody>
+                  <TableFooter>
+                    <TableRow>
+                      <TableCell className="font-semibold">Total del local</TableCell>
+                      <TableCell className="text-right font-semibold tabular-nums">{tot.serv}</TableCell>
+                      <TableCell className="text-right font-semibold tabular-nums">{formatMoney(tot.total)}</TableCell>
+                      <TableCell className="text-right font-semibold tabular-nums">{formatMoney(tot.comision)}</TableCell>
+                      <TableCell className="text-right font-semibold tabular-nums">{formatMoney(tot.local)}</TableCell>
+                    </TableRow>
+                  </TableFooter>
+                </Table>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card className="border-0 shadow-md">
-            <CardHeader>
-              <CardTitle>Rendimiento por Peluquero</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={peluquerosData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="nombre" />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="ingresos" fill="#06B6D4" />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
-          <Card className="border-0 shadow-md">
-            <CardHeader>
-              <CardTitle>Comparativo por Local</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {localesData.map((local, index) => (
-                  <div key={index} className="flex items-center justify-between p-4 bg-stylepro-lavender-50/50 rounded-lg">
-                    <div>
-                      <h3 className="font-semibold">StylePro {local.local}</h3>
-                      <p className="text-sm text-muted-foreground">{local.clientes} clientes</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-lg font-bold text-stylepro-gold-600">S/{local.ingresos.toLocaleString()}</p>
-                      <p className="text-sm text-green-600">+{local.crecimiento}%</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+                <ChartCard title="Reparto por trabajador" height={Math.max(180, g.filas.length * 52)} empty={tot.total === 0}
+                  summary={g.filas.map(f => `${f.trabajador}: le toca ${formatMoney(f.comision)} de ${formatMoney(f.total)}`).join("; ")}>
+                  <BarChart data={g.filas} layout="vertical" margin={{ left: 10, right: 16 }}>
+                    <CartesianGrid {...GRID_PROPS} horizontal={false} vertical />
+                    <XAxis type="number" {...AXIS_PROPS} tickFormatter={compactMoney} />
+                    <YAxis type="category" dataKey="trabajador" {...AXIS_PROPS} width={110} />
+                    <Tooltip content={<ChartTooltip />} cursor={{ fill: "hsl(250 30% 96%)" }} />
+                    <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+                    <Bar dataKey="comision" name="Le toca al trabajador" stackId="a" fill={colors.gold} isAnimationActive={!reduced} />
+                    <Bar dataKey="parte_local" name="Para el local" stackId="a" fill={colors.teal} radius={[0, 6, 6, 0]} isAnimationActive={!reduced} />
+                  </BarChart>
+                </ChartCard>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
     </div>
   );

@@ -65,28 +65,28 @@ export default {
 				},
 				stylepro: {
 					lavender: {
-						50: '#f8f7ff',
-						100: '#f0edff',
-						200: '#e4dfff',
-						300: '#d1c7ff',
-						400: '#b8a5ff',
-						500: '#9b7dff',
-						600: '#8b5cf6',
-						700: '#7c3aed',
-						800: '#6d28d9',
-						900: '#5b21b6'
+						50: 'hsl(var(--brand-50) / <alpha-value>)',
+						100: 'hsl(var(--brand-100) / <alpha-value>)',
+						200: 'hsl(var(--brand-200) / <alpha-value>)',
+						300: 'hsl(var(--brand-300) / <alpha-value>)',
+						400: 'hsl(var(--brand-400) / <alpha-value>)',
+						500: 'hsl(var(--brand-500) / <alpha-value>)',
+						600: 'hsl(var(--brand-600) / <alpha-value>)',
+						700: 'hsl(var(--brand-700) / <alpha-value>)',
+						800: 'hsl(var(--brand-800) / <alpha-value>)',
+						900: 'hsl(var(--brand-900) / <alpha-value>)'
 					},
 					gold: {
-						50: '#fffbeb',
-						100: '#fef3c7',
-						200: '#fde68a',
-						300: '#fcd34d',
-						400: '#fbbf24',
-						500: '#f59e0b',
-						600: '#d97706',
-						700: '#b45309',
-						800: '#92400e',
-						900: '#78350f'
+						50: 'hsl(var(--sec-50) / <alpha-value>)',
+						100: 'hsl(var(--sec-100) / <alpha-value>)',
+						200: 'hsl(var(--sec-200) / <alpha-value>)',
+						300: 'hsl(var(--sec-300) / <alpha-value>)',
+						400: 'hsl(var(--sec-400) / <alpha-value>)',
+						500: 'hsl(var(--sec-500) / <alpha-value>)',
+						600: 'hsl(var(--sec-600) / <alpha-value>)',
+						700: 'hsl(var(--sec-700) / <alpha-value>)',
+						800: 'hsl(var(--sec-800) / <alpha-value>)',
+						900: 'hsl(var(--sec-900) / <alpha-value>)'
 					},
 					blue: {
 						50: '#eff6ff',
@@ -101,6 +101,9 @@ export default {
 						900: '#1e3a8a'
 					}
 				}
+			},
+			fontFamily: {
+				sans: ['var(--font-app)'],
 			},
 			borderRadius: {
 				lg: 'var(--radius)',

@@ -7,6 +7,7 @@
 
 @layer base {
   :root {
+    --font-app: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     --background: 250 100% 98%;
     --foreground: 250 15% 15%;
 
@@ -114,4 +115,14 @@
 
 ::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--muted-foreground) / 0.5);
+}
+
+/* Accesibilidad: sin animaciones para quien pide reducir el movimiento */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

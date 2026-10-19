@@ -1,18 +1,28 @@
 // src/pages/auth/LoginPage.tsx
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from "sonner";
 import { useAuth } from '@/hooks/useAuth';
+import { useBrand } from '@/hooks/useBrand';
 
 export function LoginPage() {
   const [username, setUsernameInput] = useState('');
   const [password, setPassword] = useState('');
   const navigate = useNavigate();
   const { login } = useAuth();
+  const { nombre, logoUrl } = useBrand();
+  const [searchParams] = useSearchParams();
+
+  // api.ts redirige aquí con ?expired=1 cuando el servidor rechaza el token
+  useEffect(() => {
+    if (searchParams.get('expired')) {
+      toast.info('Tu sesión expiró. Inicia sesión de nuevo.');
+    }
+  }, [searchParams]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,7 +40,7 @@ export function LoginPage() {
       const data = await response.json();
 
       if (response.ok) {
-        login(data.user.username, data.user.role, data.user.local_id);
+        login(data.token, data.user);
         toast.success(`Bienvenido, ${data.user.username}!`);
         navigate('/');
       } else {
@@ -50,8 +60,9 @@ export function LoginPage() {
     <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-background via-stylepro-lavender-50/30 to-stylepro-blue-50/20">
       <Card className="w-full max-w-sm shadow-2xl animate-fade-in">
         <CardHeader>
+          {logoUrl && <img src={logoUrl} alt="" className="mx-auto mb-2 h-16 w-16 object-contain" />}
           <CardTitle className="text-2xl text-center font-bold text-foreground">
-            Koko
+            {nombre}
           </CardTitle>
         </CardHeader>
         <CardContent>

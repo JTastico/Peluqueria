@@ -1,4 +1,8 @@
 const mysql = require('mysql2/promise');
+const crypto = require('crypto');
+const bcrypt = require('bcrypt');
+const { crearEsquemaSeguridad } = require('./schema/seguridad');
+const { crearEsquemaVentas } = require('./schema/ventas');
 require('dotenv').config();
 
 const dbConfig = {
@@ -8,7 +12,8 @@ const dbConfig = {
     database: process.env.DB_NAME,
     waitForConnections: true, 
     connectionLimit: 10,       
-    queueLimit: 0              
+    queueLimit: 0,
+    connectTimeout: 10000
 };
 
 let pool; 
@@ -23,18 +28,27 @@ async function connectDB() {
 
         await pool.execute(`
             CREATE TABLE IF NOT EXISTS users (
-                id INT AUTO_INCREMENT PRIMARY KEY,
+                id CHAR(36) PRIMARY KEY,
                 username VARCHAR(255) UNIQUE NOT NULL,
                 password VARCHAR(255) NOT NULL,
                 role VARCHAR(50) NOT NULL,
-                local_id BIGINT
+                local_id CHAR(36)
             )
         `);
         console.log('Tabla de users creada o ya existe.');
 
+        // Migración: los usuarios con rol 'trabajador' apuntan a su registro en trabajadores
+        const [colTrab] = await pool.query(
+            "SELECT COUNT(*) AS n FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'trabajador_id'"
+        );
+        if (colTrab[0].n === 0) {
+            await pool.execute('ALTER TABLE users ADD COLUMN trabajador_id CHAR(36) NULL');
+            console.log('Columna users.trabajador_id agregada.');
+        }
+
         await pool.execute(`
             CREATE TABLE IF NOT EXISTS locales (
-                id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                id CHAR(36) PRIMARY KEY,
                 type VARCHAR(50) NOT NULL,
                 nombre VARCHAR(255) NOT NULL,
                 direccion VARCHAR(255),
@@ -54,7 +68,7 @@ async function connectDB() {
         // --- CORRECCIÓN CRÍTICA: Definición de la tabla 'trabajadores' ---
         await pool.execute(`
             CREATE TABLE IF NOT EXISTS trabajadores (
-                id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                id CHAR(36) PRIMARY KEY,
                 nombre VARCHAR(255) NOT NULL,
                 apellido VARCHAR(255) NOT NULL,
                 edad INT,                           
@@ -73,7 +87,7 @@ async function connectDB() {
                 ingreso_mensual DECIMAL(10, 2) DEFAULT 0.00, 
                 foto VARCHAR(255),                  
                 servicios JSON,                     
-                local_id BIGINT NOT NULL,
+                local_id CHAR(36) NOT NULL,
                 salario DECIMAL(10, 2) DEFAULT 0.00, 
                 fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (local_id) REFERENCES locales(id) ON DELETE CASCADE
@@ -83,13 +97,13 @@ async function connectDB() {
 
         await pool.execute(`
             CREATE TABLE IF NOT EXISTS servicios (
-                id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                id CHAR(36) PRIMARY KEY,
                 nombre VARCHAR(255) NOT NULL,
                 categoria VARCHAR(100),
                 precio DECIMAL(10, 2),
                 duracion VARCHAR(50),
                 descripcion TEXT,
-                local_id BIGINT NOT NULL,
+                local_id CHAR(36) NOT NULL,
                 FOREIGN KEY (local_id) REFERENCES locales(id) ON DELETE CASCADE
             )
         `);
@@ -97,8 +111,8 @@ async function connectDB() {
 
         await pool.execute(`
             CREATE TABLE IF NOT EXISTS trabajador_servicio (
-                trabajador_id BIGINT NOT NULL,
-                servicio_id BIGINT NOT NULL,
+                trabajador_id CHAR(36) NOT NULL,
+                servicio_id CHAR(36) NOT NULL,
                 PRIMARY KEY (trabajador_id, servicio_id),
                 FOREIGN KEY (trabajador_id) REFERENCES trabajadores(id) ON DELETE CASCADE,
                 FOREIGN KEY (servicio_id) REFERENCES servicios(id) ON DELETE CASCADE
@@ -108,14 +122,14 @@ async function connectDB() {
 
         await pool.execute(`
             CREATE TABLE IF NOT EXISTS cliente_spa (
-                id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                id CHAR(36) PRIMARY KEY,
                 nombre VARCHAR(255) NOT NULL,
                 apellido VARCHAR(255),
                 fecha_cita DATE NOT NULL,
                 hora_cita TIME NOT NULL,
-                servicio_id BIGINT NOT NULL,
-                trabajador_id BIGINT,
-                local_id BIGINT NOT NULL,
+                servicio_id CHAR(36) NOT NULL,
+                trabajador_id CHAR(36),
+                local_id CHAR(36) NOT NULL,
                 notas TEXT,
                 fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (servicio_id) REFERENCES servicios(id) ON DELETE CASCADE,
@@ -125,14 +139,14 @@ async function connectDB() {
         `);
         await pool.execute(`
             CREATE TABLE IF NOT EXISTS cliente_barberia (
-                id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                id CHAR(36) PRIMARY KEY,
                 nombre VARCHAR(255) NOT NULL,
                 apellido VARCHAR(255),
                 fecha_cita DATE NOT NULL,
                 hora_cita TIME NOT NULL,
-                servicio_id BIGINT NOT NULL,
-                trabajador_id BIGINT,
-                local_id BIGINT NOT NULL,
+                servicio_id CHAR(36) NOT NULL,
+                trabajador_id CHAR(36),
+                local_id CHAR(36) NOT NULL,
                 notas TEXT,
                 fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (servicio_id) REFERENCES servicios(id) ON DELETE CASCADE,
@@ -142,14 +156,14 @@ async function connectDB() {
         `);
         await pool.execute(`
             CREATE TABLE IF NOT EXISTS cliente_peluqueria (
-                id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                id CHAR(36) PRIMARY KEY,
                 nombre VARCHAR(255) NOT NULL,
                 apellido VARCHAR(255),
                 fecha_cita DATE NOT NULL,
                 hora_cita TIME NOT NULL,
-                servicio_id BIGINT NOT NULL,
-                trabajador_id BIGINT,
-                local_id BIGINT NOT NULL,
+                servicio_id CHAR(36) NOT NULL,
+                trabajador_id CHAR(36),
+                local_id CHAR(36) NOT NULL,
                 notas TEXT,
                 fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (servicio_id) REFERENCES servicios(id) ON DELETE CASCADE,
@@ -160,13 +174,51 @@ async function connectDB() {
         console.log('Tablas de clientes (spa, barberia, peluqueria) creadas o ya existen.');
 
 
+        await pool.execute(`
+            CREATE TABLE IF NOT EXISTS productos (
+                id CHAR(36) PRIMARY KEY,
+                local_id CHAR(36) NOT NULL,
+                nombre VARCHAR(255) NOT NULL,
+                stock INT NOT NULL DEFAULT 0,
+                stock_minimo INT NOT NULL DEFAULT 0,
+                precio DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+                fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (local_id) REFERENCES locales(id) ON DELETE CASCADE
+            );
+        `);
+        console.log('Tabla de productos (inventario) creada o ya existe.');
+
+        await pool.execute(`
+            CREATE TABLE IF NOT EXISTS configuracion (
+                clave VARCHAR(50) PRIMARY KEY,
+                valor VARCHAR(255) NOT NULL DEFAULT ''
+            );
+        `);
+        await pool.query(
+            "INSERT IGNORE INTO configuracion (clave, valor) VALUES ('nombre_negocio', 'Koko'), ('email', ''), ('telefono', ''), ('direccion', '')"
+        );
+
+
         // --- Insertar datos iniciales si no existen ---
+        // Las claves numéricas de los datos semilla se traducen a UUID v4 (una sola vez por clave).
+        const seedIds = new Map();
+        const uuidFor = (kind, key) => {
+            const k = `${kind}:${key}`;
+            if (!seedIds.has(k)) seedIds.set(k, crypto.randomUUID());
+            return seedIds.get(k);
+        };
+
         const [userRows] = await pool.query("SELECT COUNT(*) as count FROM users");
         if (userRows[0].count === 0) {
-            await pool.query("INSERT INTO users (username, password, role, local_id) VALUES (?, ?, ?, ?)", ["admin", "admin", "admin", null]);
-            await pool.query("INSERT INTO users (username, password, role, local_id) VALUES (?, ?, ?, ?)", ["barberia", "barberia", "encargado", 1]);
-            await pool.query("INSERT INTO users (username, password, role, local_id) VALUES (?, ?, ?, ?)", ["peluqueria", "peluqueria", "encargado", 2]);
-            await pool.query("INSERT INTO users (username, password, role, local_id) VALUES (?, ?, ?, ?)", ["spa", "spa", "encargado", 3]);
+            // Sin contraseñas por defecto conocidas: se generan al azar y se muestran una sola vez
+            const credenciales = [['admin', 'admin', null], ['barberia', 'encargado', uuidFor('local', 1)],
+                                  ['peluqueria', 'encargado', uuidFor('local', 2)], ['spa', 'encargado', uuidFor('local', 3)]];
+            for (const [username, role, localId] of credenciales) {
+                const clave = (username === 'admin' && process.env.ADMIN_PASSWORD) || crypto.randomBytes(12).toString('base64url');
+                await pool.query("INSERT INTO users (id, username, password, role, local_id) VALUES (?, ?, ?, ?, ?)",
+                    [crypto.randomUUID(), username, await bcrypt.hash(clave, 10), role, localId]);
+                if (!(username === 'admin' && process.env.ADMIN_PASSWORD)) console.log(`Usuario inicial "${username}" — contraseña generada (cámbiala al ingresar): ${clave}`);
+            }
             console.log('Usuarios por defecto insertados.');
         } 
         
@@ -179,12 +231,13 @@ async function connectDB() {
             ];
 
             for (const local of initialLocalesData) {
-                const [existing] = await pool.query('SELECT id FROM locales WHERE id = ?', [local.id]);
+                const localUuid = uuidFor('local', local.id);
+                const [existing] = await pool.query('SELECT id FROM locales WHERE id = ?', [localUuid]);
                 if (existing.length === 0) {
                     await pool.query(
                         `INSERT INTO locales (id, type, nombre, direccion, telefono, horario, peluqueros, ingresosMes, clientesActivos, imagen, estado, username, password)
                          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                        [local.id, local.type, local.nombre, local.direccion, local.telefono, local.horario, local.peluqueros, local.ingresosMes, local.clientesActivos, local.imagen, local.estado, local.username, local.password]
+                        [localUuid, local.type, local.nombre, local.direccion, local.telefono, local.horario, local.peluqueros, local.ingresosMes, local.clientesActivos, local.imagen, local.estado, local.username, '']
                     );
                 }
             }
@@ -203,18 +256,19 @@ async function connectDB() {
             ];
 
             for (const trabajador of initialTrabajadoresData) {
-                const [localExists] = await pool.query('SELECT id FROM locales WHERE id = ?', [trabajador.local_id]);
+                const localUuid = uuidFor('local', trabajador.local_id);
+                const [localExists] = await pool.query('SELECT id FROM locales WHERE id = ?', [localUuid]);
                 if (localExists.length > 0) {
                     await pool.query(
                         `INSERT INTO trabajadores (id, nombre, apellido, edad, dni, telefono, email, nacionalidad, estado_civil, fecha_ingreso, nivel_estudios, experiencia, cantidad_hijos, especialidad, valoracion, clientes_atendidos, ingreso_mensual, foto, servicios, local_id, salario)
                          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, // 21 placeholders
                         [
-                            trabajador.id, trabajador.nombre, trabajador.apellido, trabajador.edad, trabajador.dni,
+                            uuidFor('trabajador', trabajador.id), trabajador.nombre, trabajador.apellido, trabajador.edad, trabajador.dni,
                             trabajador.telefono, trabajador.email, trabajador.nacionalidad, trabajador.estado_civil,
                             trabajador.fecha_ingreso, trabajador.nivel_estudios, trabajador.experiencia,
                             trabajador.cantidad_hijos, trabajador.especialidad, trabajador.valoracion,
                             trabajador.clientes_atendidos, trabajador.ingreso_mensual, trabajador.foto,
-                            JSON.stringify(trabajador.servicios), trabajador.local_id, trabajador.salario
+                            JSON.stringify(trabajador.servicios), localUuid, trabajador.salario
                         ]
                     );
                 } else {
@@ -239,12 +293,13 @@ async function connectDB() {
             ];
 
             for (const servicio of initialServiciosData) {
-                const [localExists] = await pool.query('SELECT id FROM locales WHERE id = ?', [servicio.local_id]);
+                const localUuid = uuidFor('local', servicio.local_id);
+                const [localExists] = await pool.query('SELECT id FROM locales WHERE id = ?', [localUuid]);
                 if (localExists.length > 0) {
                     await pool.query(
                         `INSERT INTO servicios (id, nombre, categoria, precio, duracion, descripcion, local_id)
                          VALUES (?, ?, ?, ?, ?, ?, ?)`,
-                        [servicio.id, servicio.nombre, servicio.categoria, servicio.precio, servicio.duracion, servicio.descripcion, servicio.local_id]
+                        [uuidFor('servicio', servicio.id), servicio.nombre, servicio.categoria, servicio.precio, servicio.duracion, servicio.descripcion, localUuid]
                     );
                 } else {
                     console.warn(`Advertencia: Local con ID ${servicio.local_id} no encontrado para el servicio ${servicio.nombre}. No se insertará este servicio.`);
@@ -253,13 +308,33 @@ async function connectDB() {
             console.log('Datos de servicios por defecto insertados (o ya existían).');
         }
 
+        const [productosCount] = await pool.execute('SELECT COUNT(*) AS count FROM productos');
+        if (productosCount[0].count === 0) {
+            const productosIniciales = [
+                ['barberia', 'Shampoo Profesional', 45, 10, 180], ['barberia', 'Cera Modeladora', 18, 6, 120], ['barberia', 'Aceite para Barba', 3, 5, 95],
+                ['peluqueria', 'Shampoo Profesional', 38, 10, 180], ['peluqueria', 'Tinte Castaño', 15, 8, 350], ['peluqueria', 'Mascarilla Reparadora', 4, 6, 280],
+                ['spa', 'Aceite de Masaje', 22, 5, 85], ['spa', 'Crema Facial', 6, 4, 140], ['spa', 'Esmalte de Uñas', 0, 2, 25]
+            ];
+            for (const [tipo, nombre, stock, minimo, precio] of productosIniciales) {
+                const [locs] = await pool.query('SELECT id FROM locales WHERE type = ? ORDER BY id LIMIT 1', [tipo]);
+                if (locs.length === 0) continue;
+                await pool.query(
+                    'INSERT INTO productos (id, local_id, nombre, stock, stock_minimo, precio) VALUES (?, ?, ?, ?, ?, ?)',
+                    [crypto.randomUUID(), locs[0].id, nombre, stock, minimo, precio]
+                );
+            }
+            console.log('Inventario inicial insertado.');
+        }
+
         const [trabajadorServicioCount] = await pool.execute('SELECT COUNT(*) AS count FROM trabajador_servicio');
         if (trabajadorServicioCount[0].count === 0) {
-            await pool.execute(`
-                INSERT INTO trabajador_servicio (trabajador_id, servicio_id) VALUES
-                (1, 101), (1, 102), (2, 201), (2, 202), (3, 301), (3, 302),
-                (1, 103), (2, 203), (3, 303);
-            `);
+            const pares = [[1, 101], [1, 102], [2, 201], [2, 202], [3, 301], [3, 302], [1, 103], [2, 203], [3, 303]];
+            for (const [t, sv] of pares) {
+                await pool.execute(
+                    'INSERT INTO trabajador_servicio (trabajador_id, servicio_id) VALUES (?, ?)',
+                    [uuidFor('trabajador', t), uuidFor('servicio', sv)]
+                );
+            }
             console.log('Asignación inicial de trabajadores a servicios completada.');
         }
 
@@ -272,9 +347,12 @@ async function connectDB() {
             ];
 
             for (const cliente of initialClientesData) {
-                const [localExists] = await pool.query('SELECT id, type FROM locales WHERE id = ?', [cliente.local_id]);
-                const [servicioExists] = await pool.query('SELECT id FROM servicios WHERE id = ?', [cliente.servicio_id]);
-                const [trabajadorExists] = cliente.trabajador_id ? await pool.query('SELECT id FROM trabajadores WHERE id = ?', [cliente.trabajador_id]) : [null];
+                const localUuid = uuidFor('local', cliente.local_id);
+                const servicioUuid = uuidFor('servicio', cliente.servicio_id);
+                const trabajadorUuid = cliente.trabajador_id ? uuidFor('trabajador', cliente.trabajador_id) : null;
+                const [localExists] = await pool.query('SELECT id, type FROM locales WHERE id = ?', [localUuid]);
+                const [servicioExists] = await pool.query('SELECT id FROM servicios WHERE id = ?', [servicioUuid]);
+                const [trabajadorExists] = trabajadorUuid ? await pool.query('SELECT id FROM trabajadores WHERE id = ?', [trabajadorUuid]) : [null];
 
                 if (localExists.length > 0 && servicioExists.length > 0 && (!cliente.trabajador_id || (trabajadorExists && trabajadorExists.length > 0))) {
                     const localType = localExists[0].type;
@@ -291,7 +369,7 @@ async function connectDB() {
                     await pool.query(
                         `INSERT INTO ${tableName} (id, nombre, apellido, fecha_cita, hora_cita, servicio_id, trabajador_id, local_id, notas)
                          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                        [cliente.id, cliente.nombre, cliente.apellido, cliente.fecha_cita, cliente.hora_cita, cliente.servicio_id, cliente.trabajador_id, cliente.local_id, cliente.notas]
+                        [crypto.randomUUID(), cliente.nombre, cliente.apellido, cliente.fecha_cita, cliente.hora_cita, servicioUuid, trabajadorUuid, localUuid, cliente.notas]
                     );
                 } else {
                     console.warn(`Advertencia: No se pudo insertar cliente ${cliente.nombre} debido a IDs de local, servicio o trabajador no encontrados.`);
@@ -300,6 +378,19 @@ async function connectDB() {
             console.log('Datos de clientes por defecto insertados (o ya existían).');
         }
 
+
+        // Roles, permisos, historial de trabajadores por local, horarios y apariencia
+        await crearEsquemaSeguridad(pool);
+        await crearEsquemaVentas(pool);
+
+        // Migración de seguridad: contraseñas en texto plano -> hash bcrypt
+        const [planas] = await pool.query("SELECT id, password FROM users WHERE password NOT LIKE '$2%'");
+        for (const u of planas) {
+            await pool.query('UPDATE users SET password = ? WHERE id = ?', [await bcrypt.hash(u.password, 10), u.id]);
+        }
+        if (planas.length > 0) console.log(`Contraseñas migradas a hash: ${planas.length}.`);
+        // La tabla locales ya no guarda contraseñas (viven, con hash, en users)
+        await pool.query("UPDATE locales SET password = '' WHERE password <> ''");
 
     } catch (err) {
         console.error('Error al inicializar la base de datos:', err.message);

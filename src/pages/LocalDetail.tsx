@@ -4,8 +4,10 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, DollarSign, Users, Scissors, TrendingUp, Calendar as CalendarIcon, Trophy, Sparkles } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
+import { ArrowLeft, Banknote, Users, Scissors, Receipt, Calendar as CalendarIcon, Trophy, Sparkles, MapPin, Clock } from 'lucide-react';
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Tooltip, XAxis, YAxis } from 'recharts';
+import { MetricCard } from '@/components/MetricCard';
+import { AXIS_PROPS, useChartColors, ChartCard, ChartTooltip, GRID_PROPS, compactMoney, money, useReducedMotion } from '@/components/charts/ChartKit';
 import { cn } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -46,11 +48,9 @@ const YearPicker = ({ onSelect }: { onSelect: (date: Date) => void }) => {
 
 type TimeRange = 'day' | 'week' | 'month' | 'year';
 
-const COLORS = ['#8B5CF6', '#3B82F6', '#F59E0B', '#10B981'];
-
 // Definir la interfaz para Local (SIN 'servicios' ni 'trabajadores' directos)
 interface Local {
-  id: number;
+  id: string;
   type: "peluqueria" | "spa" | "barberia";
   nombre: string;
   direccion: string;
@@ -67,7 +67,7 @@ interface Local {
 
 // Definir la interfaz para Servicio (para cargar servicios específicos del local)
 interface Servicio {
-  id: number;
+  id: string;
   nombre: string;
   categoria: string;
   precio: number;
@@ -76,14 +76,15 @@ interface Servicio {
   ingresosMes: number; // para métricas simuladas, se mantiene en LocalDetail.
   clientesMes: number; // Lo mismo.
   descripcion: string;
-  local_id: number;
+  local_id: string;
 }
 
 
 const LocalDetail = () => {
   const { localId } = useParams<{ localId: string }>();
   const navigate = useNavigate();
-  const { userRole, localId: authLocalId } = useAuth();
+  const reduced = useReducedMotion();
+  const colors = useChartColors();
   
   const [local, setLocal] = useState<Local | null>(null);
   const [serviciosLocal, setServiciosLocal] = useState<Servicio[]>([]); // Estado para servicios del local
@@ -109,18 +110,11 @@ const LocalDetail = () => {
         const resLocal = await fetch(`http://localhost:3001/api/locales/${localId}`);
         if (!resLocal.ok) {
           if (resLocal.status === 404) throw new Error("Local no encontrado.");
+          if (resLocal.status === 403) throw new Error("No tienes acceso a este local.");
           throw new Error(`Error al cargar los detalles del local: ${resLocal.statusText}`);
         }
         const dataLocal: Local = await resLocal.json();
 
-        // Lógica de autorización
-        if (userRole === 'encargado' && dataLocal.id !== parseInt(authLocalId || '0')) {
-          setError("No tienes permiso para ver este local.");
-          setLocal(null);
-          toast.error("Acceso denegado", { description: "No tienes permiso para ver los detalles de este local." });
-          if (authLocalId) { navigate(`/locales/${authLocalId}`); } else { navigate('/locales'); }
-          return;
-        }
         setLocal(dataLocal);
 
         // 2. Fetch de los servicios específicos de este local
@@ -140,62 +134,31 @@ const LocalDetail = () => {
     };
 
     fetchLocalAndServicesDetail();
-  }, [localId, userRole, authLocalId, navigate]);
+  }, [localId, navigate]);
 
 
-  // Usamos useMemo para generar datos simulados basados en el local y sus servicios
-  const { chartData, metrics } = useMemo(() => {
-    if (!local || loading || serviciosLocal.length === 0) { // Ahora depende de serviciosLocal
-        return {
-            chartData: { tendencia: [], distribucion: [] },
-            metrics: { income: 0, services: 0, clients: 0, topWorkerName: 'Cargando...', topWorkerServices: 0, topServiceName: 'Cargando...', topServiceCount: 0 }
-        };
-    }
+  // Datos reales del periodo, calculados en el backend desde los tickets cobrados
+  const [chartData, setChartData] = useState<{ tendencia: { name: string; Ingresos: number }[]; distribucion: { n: string; v: number }[] }>({ tendencia: [], distribucion: [] });
+  const [metrics, setMetrics] = useState({ income: 0, services: 0, clients: 0, localShare: 0, workersShare: 0, topWorkerName: 'Sin datos', topWorkerServices: 0, topServiceName: 'Sin datos', topServiceCount: 0 });
 
-    const generateData = (factor: number, count: number, labelPrefix: string) => {
-        const currentLocalServices = serviciosLocal.map(s => s.nombre);
-
-        const trend = Array.from({ length: count }, (_, i) => ({
-            name: `${labelPrefix}${i + 1}`,
-            Ingresos: Math.floor(Math.random() * 800 * factor) + 200 * factor * (parseInt(localId || '1') || 1), // Usar localId en parseInt
-        }));
-
-        const totalIncome = trend.reduce((sum, item) => sum + item.Ingresos, 0);
-        const totalServices = Math.floor(totalIncome / (40 * factor + 10));
-        
-        const serviceDistribution = currentLocalServices.map(s => ({
-            name: s,
-            value: Math.floor(Math.random() * totalServices / currentLocalServices.length) + 1
-        }));
-        const topService = [...serviceDistribution].sort((a,b) => b.value - a.value)[0] || { name: 'N/A', value: 0};
-        const topWorker = { name: 'Trabajador Genérico', value: Math.floor(totalServices * 0.3) };
-
-
-        return {
-            tendencia: trend,
-            distribucion: serviceDistribution.map(({ name, value }) => ({ n: name, v: value })),
-            metrics: {
-                income: totalIncome,
-                services: totalServices,
-                clients: Math.floor(totalServices * 0.75),
-                topWorkerName: topWorker.name,
-                topWorkerServices: topWorker.value,
-                topServiceName: topService.name,
-                topServiceCount: topService.value,
-            }
-        };
-    };
-
-    let generatedData;
-    switch (timeRange) {
-        case 'day': generatedData = generateData(0.1, 8, 'h'); break;
-        case 'week': generatedData = generateData(0.5, 7, 'd'); break;
-        case 'month': generatedData = generateData(2, 4, 's'); break;
-        case 'year': generatedData = generateData(10, 12, 'm'); break;
-        default: generatedData = { tendencia: [], distribucion: [], metrics: { income: 0, services: 0, clients: 0, topWorkerName: 'N/A', topWorkerServices: 0, topServiceName: 'N/A', topServiceCount: 0 } };
-    }
-    return { chartData: generatedData, metrics: generatedData.metrics };
-  }, [local, loading, serviciosLocal, timeRange, selectedDate, localId]);
+  useEffect(() => {
+    if (!localId) return;
+    let cancelled = false;
+    const fecha = format(selectedDate, 'yyyy-MM-dd');
+    fetch(`http://localhost:3001/api/reportes/local/${localId}?periodo=${timeRange}&fecha=${fecha}`)
+      .then(async r => {
+        const body = await r.json();
+        if (!r.ok) throw new Error(body.message || 'Error al cargar el detalle del local');
+        return body;
+      })
+      .then(d => {
+        if (cancelled) return;
+        setChartData({ tendencia: d.tendencia, distribucion: d.distribucion });
+        setMetrics(d.metrics);
+      })
+      .catch(e => !cancelled && toast.error(e.message));
+    return () => { cancelled = true; };
+  }, [localId, timeRange, selectedDate]);
 
   if (loading) {
     return (
@@ -255,67 +218,120 @@ const LocalDetail = () => {
   };
 
 
+  const PERIODOS: { id: TimeRange; label: string }[] = [
+    { id: 'day', label: 'Día' }, { id: 'week', label: 'Semana' }, { id: 'month', label: 'Mes' }, { id: 'year', label: 'Año' },
+  ];
+  const picker = (id: TimeRange) => {
+    switch (id) {
+      case 'day': return <Calendar mode="single" selected={selectedDate} onSelect={(d) => handleDateSelect(d, 'day')} />;
+      case 'week': return <Calendar mode="single" showOutsideDays={false} selected={selectedDate} onSelect={(d) => handleDateSelect(d, 'week')} />;
+      case 'month': return <MonthPicker onSelect={(d) => handleDateSelect(d, 'month')} />;
+      default: return <YearPicker onSelect={(d) => handleDateSelect(d, 'year')} />;
+    }
+  };
+  const ticketPromedio = metrics.clients > 0 ? metrics.income / metrics.clients : 0;
+  const maxServicio = Math.max(1, ...chartData.distribucion.map(d => d.v));
+  const sinDatos = metrics.services === 0;
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-stylepro-lavender-50/30 to-stylepro-blue-50/20">
-      <div className="container mx-auto px-6 py-8 animate-fade-in">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
-          <div className="flex items-center gap-4">
-              <Button variant="outline" size="icon" onClick={() => navigate('/locales')}><ArrowLeft className="h-4 w-4" /></Button>
-              <div>
-                  <h1 className="text-3xl font-bold text-foreground">{local.nombre}</h1>
-                  <p className="text-muted-foreground">Dashboard de rendimiento del local.</p>
-              </div>
-          </div>
-          
-          <div className="flex items-center gap-1 p-1 bg-muted rounded-lg flex-wrap justify-center">
-            <Popover><PopoverTrigger asChild><Button variant={timeRange === 'day' ? "default" : "ghost"} className={cn("capitalize w-auto flex-1 min-w-[80px]", timeRange === 'day' && "bg-stylepro-lavender-600 hover:bg-stylepro-lavender-700")}><CalendarIcon className="mr-2 h-4 w-4" />{timeRange === 'day' ? getButtonLabel('day') : 'Día'}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={selectedDate} onSelect={(d) => handleDateSelect(d, 'day')} /></PopoverContent></Popover>
-            <Popover><PopoverTrigger asChild><Button variant={timeRange === 'week' ? "default" : "ghost"} className={cn("capitalize w-auto flex-1 min-w-[80px]", timeRange === 'week' && "bg-stylepro-lavender-600 hover:bg-stylepro-lavender-700")}><CalendarIcon className="mr-2 h-4 w-4" />{timeRange === 'week' ? getButtonLabel('week') : 'Semana'}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" showOutsideDays={false} onSelect={(d) => handleDateSelect(d, 'week')} selected={selectedDate} /></PopoverContent></Popover>
-            <Popover><PopoverTrigger asChild><Button variant={timeRange === 'month' ? "default" : "ghost"} className={cn("capitalize w-auto flex-1 min-w-[80px]", timeRange === 'month' && "bg-stylepro-lavender-600 hover:bg-stylepro-lavender-700")}><CalendarIcon className="mr-2 h-4 w-4" />{timeRange === 'month' ? getButtonLabel('month') : 'Mes'}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><MonthPicker onSelect={(d) => handleDateSelect(d, 'month')} /></PopoverContent></Popover>
-            <Popover><PopoverTrigger asChild><Button variant={timeRange === 'year' ? "default" : "ghost"} className={cn("capitalize w-auto flex-1 min-w-[80px]", timeRange === 'year' && "bg-stylepro-lavender-600 hover:bg-stylepro-lavender-700")}><CalendarIcon className="mr-2 h-4 w-4" />{timeRange === 'year' ? getButtonLabel('year') : 'Año'}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><YearPicker onSelect={(d) => handleDateSelect(d, 'year')} /></PopoverContent></Popover>
+    <div className="p-4 md:p-6 space-y-6">
+      {/* Encabezado del local */}
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex items-start gap-4">
+          <Button variant="outline" size="icon" onClick={() => navigate('/locales')} aria-label="Volver a locales" className="mt-1 shrink-0">
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-3xl font-bold tracking-tight text-foreground">{local.nombre}</h1>
+              <Badge variant={local.estado === 'Activo' ? 'default' : 'secondary'} className="capitalize">{local.estado}</Badge>
+            </div>
+            <p className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+              {local.direccion && <span className="inline-flex items-center gap-1"><MapPin className="h-3.5 w-3.5" aria-hidden />{local.direccion}</span>}
+              {local.horario && <span className="inline-flex items-center gap-1"><Clock className="h-3.5 w-3.5" aria-hidden />{local.horario}</span>}
+            </p>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
-          <Card className="border-0 shadow-md"><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Ingresos</CardTitle><DollarSign className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">S/{metrics.income.toLocaleString()}</div><p className="text-xs text-muted-foreground">Total del periodo</p></CardContent></Card>
-          <Card className="border-0 shadow-md"><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Clientes</CardTitle><Users className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{metrics.clients}</div><p className="text-xs text-muted-foreground">Total del periodo</p></CardContent></Card>
-          <Card className="border-0 shadow-md"><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Servicios</CardTitle><Scissors className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{metrics.services}</div><p className="text-xs text-muted-foreground">Total del periodo</p></CardContent></Card>
-          
-          <Card className="border-0 shadow-md"><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Trabajador del Periodo</CardTitle><Trophy className="h-4 w-4 text-muted-foreground text-amber-500" /></CardHeader><CardContent><div className="text-2xl font-bold">{metrics.topWorkerName}</div><p className="text-xs text-muted-foreground">{`${metrics.topWorkerServices} servicios`}</p></CardContent></Card>
-          <Card className="border-0 shadow-md"><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Servicio Más Solicitado</CardTitle><Sparkles className="h-4 w-4 text-muted-foreground text-sky-500" /></CardHeader><CardContent><div className="text-2xl font-bold">{metrics.topServiceName}</div><p className="text-xs text-muted-foreground">{`${metrics.topServiceCount} veces`}</p></CardContent></Card>
-          <Card className="border-0 shadow-md"><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Ticket Promedio</CardTitle><TrendingUp className="h-4 w-4 text-muted-foreground text-emerald-500" /></CardHeader><CardContent><div className="text-2xl font-bold">S/{metrics.clients > 0 ? (metrics.income / metrics.clients).toFixed(2) : '0.00'}</div><p className="text-xs text-muted-foreground">Promedio del periodo</p></CardContent></Card>
+        <div role="group" aria-label="Periodo" className="inline-flex flex-wrap gap-1 rounded-xl border bg-white p-1 shadow-sm">
+          {PERIODOS.map(p => (
+            <Popover key={p.id}>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  aria-pressed={timeRange === p.id}
+                  className={cn(
+                    "inline-flex min-h-[36px] items-center gap-2 rounded-lg px-3.5 text-sm font-medium capitalize transition-colors duration-150 cursor-pointer",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    timeRange === p.id ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  )}
+                >
+                  <CalendarIcon className="h-4 w-4" aria-hidden />
+                  {timeRange === p.id ? getButtonLabel(p.id) : p.label}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0">{picker(p.id)}</PopoverContent>
+            </Popover>
+          ))}
         </div>
+      </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-          <Card className="lg:col-span-3 border-0 shadow-md">
-            <CardHeader><CardTitle>Tendencia de Ingresos</CardTitle></CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={chartData.tendencia} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip formatter={(value: number) => `S/${value.toLocaleString()}`} />
-                  <Legend />
-                  <Line type="monotone" dataKey="Ingresos" stroke="#8B5CF6" strokeWidth={2} />
-                </LineChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-          <Card className="lg:col-span-2 border-0 shadow-md">
-            <CardHeader><CardTitle>Distribución de Servicios</CardTitle></CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie data={chartData.distribucion} cx="50%" cy="50%" labelLine={false} label={({ n, v }) => `${n} (${v})`} outerRadius={80} fill="#8884d8" dataKey="v">
-                    {chartData.distribucion.map((entry, index) => (<Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />))}
-                  </Pie>
-                  <Tooltip formatter={(value, name) => [value, name]}/>
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </div>
+      {/* KPIs */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+        <MetricCard title="Ingresos" value={money(metrics.income)} subtitle="Total del periodo" tone="violet" icon={<Banknote className="h-5 w-5" />} />
+        <MetricCard title="Para el local" value={money(metrics.localShare)} subtitle="Después de pagar a los trabajadores" tone="green" icon={<Users className="h-5 w-5" />} />
+        <MetricCard title="Atenciones" value={metrics.clients} subtitle={`${metrics.services} servicios realizados`} tone="blue" icon={<Scissors className="h-5 w-5" />} />
+        <MetricCard title="Ticket promedio" value={money(ticketPromedio)} subtitle="Ingreso por atención" tone="gold" icon={<Receipt className="h-5 w-5" />} />
+        <MetricCard title="Trabajador del periodo" value={metrics.topWorkerName} subtitle={`${metrics.topWorkerServices} servicios`} tone="gold" icon={<Trophy className="h-5 w-5" />} />
+        <MetricCard title="Servicio más solicitado" value={metrics.topServiceName} subtitle={`${metrics.topServiceCount} veces`} tone="blue" icon={<Sparkles className="h-5 w-5" />} />
+      </div>
+
+      {/* Gráficas */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+        <ChartCard className="lg:col-span-3" title="Tendencia de ingresos" description="Lo cobrado a lo largo del periodo"
+          empty={sinDatos} summary={`Total del periodo ${money(metrics.income)} en ${metrics.services} servicios.`}>
+          <AreaChart data={chartData.tendencia} margin={{ left: 0, right: 8, top: 8 }}>
+            <defs>
+              <linearGradient id="gLocal" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={colors.primary} stopOpacity={0.35} />
+                <stop offset="100%" stopColor={colors.primary} stopOpacity={0.02} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid {...GRID_PROPS} />
+            <XAxis dataKey="name" {...AXIS_PROPS} minTickGap={20} />
+            <YAxis {...AXIS_PROPS} tickFormatter={compactMoney} width={64} />
+            <Tooltip content={<ChartTooltip />} />
+            <Area type="monotone" dataKey="Ingresos" name="Ingresos" stroke={colors.primary} strokeWidth={2.5}
+              fill="url(#gLocal)" isAnimationActive={!reduced} />
+          </AreaChart>
+        </ChartCard>
+
+        <Card className="lg:col-span-2 border border-border/60 shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-semibold">Servicios más pedidos</CardTitle>
+            <p className="text-sm text-muted-foreground">Cantidad de veces en el periodo</p>
+          </CardHeader>
+          <CardContent>
+            {chartData.distribucion.length === 0 ? (
+              <p className="py-12 text-center text-sm text-muted-foreground">Aún no hay servicios cobrados en este periodo.</p>
+            ) : (
+              <ol className="space-y-4">
+                {chartData.distribucion.map((d, i) => (
+                  <li key={d.n}>
+                    <div className="flex items-baseline justify-between gap-2 text-sm">
+                      <span className="truncate font-medium text-foreground">{i + 1}. {d.n}</span>
+                      <span className="shrink-0 font-semibold tabular-nums">{d.v}</span>
+                    </div>
+                    <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-muted" aria-hidden>
+                      <div className="h-full rounded-full bg-stylepro-lavender-500 transition-[width] duration-500"
+                        style={{ width: `${(d.v / maxServicio) * 100}%` }} />
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

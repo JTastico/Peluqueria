@@ -9,7 +9,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
-import ClientIntake from "@/components/ClientIntake";
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
@@ -17,7 +16,7 @@ import { Badge } from '@/components/ui/badge';
 
 // Definir la interfaz para Local (AHORA COINCIDE CON LA DB + CAMPOS MAPEADOS DEL BACKEND)
 interface Local {
-  id: number;
+  id: string;
   // Campos del frontend mapeados desde la DB por el controlador de backend
   type: "peluqueria" | "spa" | "barberia"; 
   peluqueros: number; 
@@ -46,7 +45,8 @@ const initialNewLocalState = {
 };
 
 const Locales = () => {
-  const { userRole, localId: authLocalId } = useAuth();
+  const { can } = useAuth();
+  const puedeAdministrar = can('locales.administrar');
   const navigate = useNavigate();
 
   const [locales, setLocales] = useState<Local[]>([]);
@@ -82,17 +82,12 @@ const Locales = () => {
   }, []);
 
   const filteredLocales = useMemo(() => {
-    let currentLocales = locales;
-  
-    if (userRole === 'encargado' && authLocalId) {
-      currentLocales = currentLocales.filter(local => local.id === parseInt(authLocalId, 10));
-    }
-  
-    return currentLocales.filter(local =>
+    // El backend ya devuelve solo los locales a los que llega el usuario
+    return locales.filter(local =>
       local.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
       local.direccion.toLowerCase().includes(searchTerm.toLowerCase())
     );
-  }, [locales, searchTerm, userRole, authLocalId]);
+  }, [locales, searchTerm]);
   
 
   const handleEdit = (local: any) => {
@@ -100,7 +95,7 @@ const Locales = () => {
     toast.success(`Editando ${local.nombre}`);
   };
 
-  const handleDelete = async (idToDelete: number) => {
+  const handleDelete = async (idToDelete: string) => {
     try {
         const response = await fetch(`http://localhost:3001/api/locales/${idToDelete}`, {
             method: 'DELETE',
@@ -176,7 +171,7 @@ const Locales = () => {
   };
 
 
-  const handleNavigate = (idToNavigate: number) => {
+  const handleNavigate = (idToNavigate: string) => {
     if (idToNavigate) {
       navigate(`/locales/${idToNavigate}`);
     } else {
@@ -226,10 +221,9 @@ const Locales = () => {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-foreground mb-2">Gestión de Locales</h1>
           <p className="text-muted-foreground">Administra y monitorea todos tus locales desde un solo lugar</p>
-          <ClientIntake />
         </div>
 
-        {userRole === 'admin' && (
+        {puedeAdministrar && (
           <div className="mb-6 flex flex-col md:flex-row gap-4 items-center justify-between">
             <div className="flex-1 max-w-md">
               <div className="relative">
@@ -292,7 +286,7 @@ const Locales = () => {
               <Card className="group overflow-hidden hover:shadow-lg hover-scale transition-all duration-300 border-0 shadow-md animate-fade-in" style={{ animationDelay: `${index * 100}ms` }}>
                 <div className="relative h-48">
                   <img src={local.imagen} alt={local.nombre} className="w-full h-full object-cover" />
-                  {userRole === 'admin' && (
+                  {puedeAdministrar && (
                     <div className="absolute top-4 left-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                       <Button size="sm" variant="secondary" className="h-8 w-8 p-0" onClick={(e) => { e.stopPropagation(); handleEdit(local); }}>
                         <Edit className="h-4 w-4" />
@@ -319,12 +313,12 @@ const Locales = () => {
                     <div className="text-center">
                       <div className="flex items-center justify-center gap-1 text-stylepro-lavender-600 mb-1"><Users className="h-4 w-4" /></div>
                       <p className="text-lg font-semibold">{local.peluqueros}</p>
-                      <p className="text-xs text-muted-foreground">Peluqueros</p>
+                      <p className="text-xs text-muted-foreground">Trabajadores</p>
                     </div>
                     <div className="text-center">
                       <div className="flex items-center justify-center gap-1 text-stylepro-blue-600 mb-1"><Users className="h-4 w-4" /></div>
                       <p className="text-lg font-semibold">{local.clientesActivos}</p>
-                      <p className="text-xs text-muted-foreground">Clientes</p>
+                      <p className="text-xs text-muted-foreground">Atenciones</p>
                     </div>
                   </div>
                 </CardContent>

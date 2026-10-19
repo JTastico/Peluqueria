@@ -1,15 +1,9 @@
 
 import { useState } from "react";
+import { useAuth } from "@/hooks/useAuth";
 import { NavLink, useLocation } from "react-router-dom";
-import {
-  LayoutDashboard,
-  MapPin,
-  Users,
-  ShoppingBag,
-  FileText,
-  Settings,
-  FileBarChart
-} from "lucide-react";
+import { ITEMS_NAV, puedeAcceder } from "@/lib/navegacion";
+import { useBrand } from "@/hooks/useBrand";
 
 import {
   Sidebar,
@@ -24,19 +18,12 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 
-const navigationItems = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "Locales", url: "/locales", icon: MapPin },
-  { title: "Peluqueros", url: "/peluqueros", icon: Users },
-  { title: "Clientes", url: "/clientes", icon: Users },
-  { title: "Servicios", url: "/servicios", icon: ShoppingBag },
-  { title: "Inventario", url: "/inventario", icon: ShoppingBag },
-  { title: "Reportes", url: "/reportes", icon: FileBarChart },
-  { title: "Configuraciones", url: "/configuraciones", icon: Settings },
-];
-
 export function AppSidebar() {
   const { state } = useSidebar();
+  const { user, username, rolNombre } = useAuth();
+  const { nombre, logoUrl } = useBrand();
+  const rolLabel = rolNombre ?? '';
+  const visibleItems = ITEMS_NAV.filter(item => puedeAcceder(item, user));
   const location = useLocation();
   const currentPath = location.pathname;
   
@@ -59,13 +46,17 @@ export function AppSidebar() {
       <SidebarContent className="bg-sidebar border-r border-sidebar-border">
         {/* Logo y Título */}
         <div className="flex items-center gap-3 px-4 py-6 border-b border-sidebar-border">
-          <div className="w-8 h-8 bg-gradient-to-r from-stylepro-lavender-500 to-stylepro-gold-500 rounded-lg flex items-center justify-center">
-            <span className="text-white font-bold text-sm">SP</span>
-          </div>
+          {logoUrl ? (
+            <img src={logoUrl} alt={`Logo de ${nombre}`} className="h-9 w-9 shrink-0 rounded-lg bg-white object-contain p-0.5" />
+          ) : (
+            <div className="w-9 h-9 shrink-0 bg-gradient-to-r from-stylepro-lavender-500 to-stylepro-gold-500 rounded-lg flex items-center justify-center" aria-hidden>
+              <span className="text-white font-bold text-sm">{nombre.substring(0, 2).toUpperCase()}</span>
+            </div>
+          )}
           {!collapsed && (
-            <div className="flex flex-col">
-              <span className="text-sidebar-foreground font-semibold text-lg">Sistema Koko</span>
-              <span className="text-sidebar-foreground/70 text-xs">Manager</span>
+            <div className="flex min-w-0 flex-col">
+              <span className="truncate text-sidebar-foreground font-semibold text-lg">{nombre}</span>
+              <span className="text-sidebar-foreground/70 text-xs">Sistema de gestión</span>
             </div>
           )}
         </div>
@@ -77,7 +68,7 @@ export function AppSidebar() {
           
           <SidebarGroupContent>
             <SidebarMenu className="space-y-1">
-              {navigationItems.map((item) => (
+              {visibleItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild className="p-0">
                     <NavLink
@@ -102,11 +93,11 @@ export function AppSidebar() {
           <div className="mt-auto p-4 border-t border-sidebar-border">
             <div className="flex items-center gap-3 px-3 py-2">
               <div className="w-8 h-8 bg-gradient-to-r from-stylepro-blue-500 to-stylepro-lavender-500 rounded-full flex items-center justify-center">
-                <span className="text-white font-medium text-sm">AD</span>
+                <span className="text-white font-medium text-sm">{(username || "??").substring(0, 2).toUpperCase()}</span>
               </div>
               <div className="flex flex-col">
-                <span className="text-sidebar-foreground font-medium text-sm">Admin</span>
-                <span className="text-sidebar-foreground/70 text-xs">Administrador</span>
+                <span className="text-sidebar-foreground font-medium text-sm capitalize">{username}</span>
+                <span className="text-sidebar-foreground/70 text-xs">{rolLabel}</span>
               </div>
             </div>
           </div>

@@ -1,15 +1,23 @@
 // backend/middleware/errorHandler.js
 const errorHandler = (err, req, res, next) => {
-    console.error(err.stack); // Loguea el stack del error en la consola del servidor
+    console.error(err.stack); // El detalle queda solo en el log del servidor
 
-    const statusCode = err.statusCode || 500;
-    const message = err.message || 'Error interno del servidor';
+    // Violación de unicidad (usuario o DNI repetido)
+    if (err.code === 'ER_DUP_ENTRY') {
+        return res.status(409).json({ success: false, message: 'Ya existe un registro con esos datos (usuario o DNI repetido).' });
+    }
+    // JSON mal formado
+    if (err.type === 'entity.parse.failed') {
+        return res.status(400).json({ success: false, message: 'El cuerpo de la petición no es JSON válido.' });
+    }
 
+    const statusCode = err.statusCode || err.status || 500;
+    const dev = process.env.NODE_ENV === 'development';
     res.status(statusCode).json({
         success: false,
-        message: message,
-        // En producción, evita enviar el stack completo
-        ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+        // En producción no se filtran detalles internos de errores 5xx
+        message: statusCode < 500 || dev ? (err.message || 'Error') : 'Error interno del servidor',
+        ...(dev && { stack: err.stack })
     });
 };
 

@@ -1,432 +1,246 @@
-// src/pages/Servicios.tsx
-import { useState, useEffect, useMemo } from "react";
-import { Scissors, Clock, DollarSign, Plus, Edit, Trash2, Search, Filter } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+import { Pencil, Plus, Scissors, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { toast } from "sonner";
-import { Skeleton } from '@/components/ui/skeleton';
-import { Separator } from '@/components/ui/separator';
-import { useAuth } from '@/hooks/useAuth';
-import { DialogDescription } from '@/components/ui/dialog';
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useAuth } from "@/hooks/useAuth";
+import { useConfirmar } from "@/hooks/useConfirmar";
+import { API_URL, formatMoney, textoReparto } from "@/lib/ventas";
 
-
-// Definir la interfaz para un Servicio
 interface Servicio {
-  id: number;
-  nombre: string;
-  categoria: string;
-  precio: number;
-  duracion: string;
-  descripcion: string;
-  local_id: number;
-  local_nombre?: string;
+  id: string; nombre: string; precio: number; porcentaje_trabajador: number; local_id: string; local_nombre: string;
 }
 
-// Definir la interfaz para Local
-interface Local {
-    id: number;
-    nombre: string;
+// Porcentaje del precio que se lleva el trabajador; el resto es del local.
+const REPARTOS = [50, 60, 70, 80, 40, 30, 20];
+
+function SelectorReparto({ valor, onChange }: { valor: number; onChange: (n: number) => void }) {
+  const esPredefinido = REPARTOS.includes(valor);
+  return (
+    <div>
+      <Label className="mb-1.5 block">¿Cómo se reparte? <span className="font-normal text-muted-foreground">({textoReparto(valor)})</span></Label>
+      <div className="grid grid-cols-4 gap-2 sm:grid-cols-7" role="group" aria-label="Reparto trabajador y local">
+        {REPARTOS.map(p => (
+          <button key={p} type="button" aria-pressed={valor === p} onClick={() => onChange(p)}
+            className={`min-h-[56px] cursor-pointer rounded-xl border px-1 text-center text-sm font-semibold leading-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${valor === p ? "border-primary bg-primary text-primary-foreground" : "bg-white hover:bg-muted"}`}>
+            {p}<span className="font-normal opacity-80"> / {100 - p}</span>
+            <span className="block text-[10px] font-normal opacity-80">trab. / local</span>
+          </button>
+        ))}
+      </div>
+      <div className="mt-2 flex items-center gap-2 text-sm">
+        <Label htmlFor="otro-pct" className="font-normal text-muted-foreground">Otro porcentaje para el trabajador:</Label>
+        <Input id="otro-pct" type="number" min={0} max={100} step="0.5" inputMode="decimal" className="w-24"
+          value={esPredefinido ? "" : valor} placeholder="%" onChange={e => { const n = Number(e.target.value); if (e.target.value !== "" && n >= 0 && n <= 100) onChange(n); }} />
+      </div>
+    </div>
+  );
 }
-
-// CAMBIO CLAVE AQUÍ: Definir initialNewServicioState como una función
-// para que pueda acceder a userRole y authLocalId
-const getInitialNewServicioState = (userRole: string | null, authLocalId: string | null) => ({
-    nombre: "",
-    categoria: "",
-    precio: "" as any,
-    duracion: "",
-    descripcion: "",
-    local_id: userRole === 'encargado' && authLocalId ? authLocalId.toString() : "" // Inicializa con authLocalId si es encargado
-});
-
 
 const Servicios = () => {
-  const { userRole, localId: authLocalId } = useAuth();
-  
+  const { localesPermitidos: locales } = useAuth();
+  const { confirmar, dialogo } = useConfirmar();
   const [servicios, setServicios] = useState<Servicio[]>([]);
-  const [locales, setLocales] = useState<Local[]>([]);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterCategoria, setFilterCategoria] = useState("todos");
-  const [filterLocalId, setFilterLocalId] = useState("todos");
+  const [filtroLocal, setFiltroLocal] = useState<string>("todos");
+  const [cargando, setCargando] = useState(true);
 
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  // CAMBIO CLAVE AQUÍ: Inicializar el estado usando la función
-  const [newServicioData, setNewServicioData] = useState(() => getInitialNewServicioState(userRole, authLocalId));
+  // Alta
+  const [nombre, setNombre] = useState("");
+  const [precio, setPrecio] = useState("");
+  const [pct, setPct] = useState(50);
+  const [destinos, setDestinos] = useState<string[]>(locales.map(l => l.id));
+  const [guardando, setGuardando] = useState(false);
 
-  const [isLoadingServicios, setIsLoadingServicios] = useState(true);
-  const [errorServicios, setErrorServicios] = useState<string | null>(null);
-  const [isLoadingLocales, setIsLoadingLocales] = useState(true);
+  // Edición
+  const [editando, setEditando] = useState<Servicio | null>(null);
+  const [eNombre, setENombre] = useState("");
+  const [ePrecio, setEPrecio] = useState("");
+  const [ePct, setEPct] = useState(50);
 
-
-  useEffect(() => {
-    const fetchData = async () => {
-      setIsLoadingServicios(true);
-      setErrorServicios(null);
-      try {
-        let serviciosUrl = 'http://localhost:3001/api/servicios';
-        if (userRole === 'encargado' && authLocalId) {
-            serviciosUrl += `?local_id=${authLocalId}`;
-        }
-
-        const resServicios = await fetch(serviciosUrl);
-        if (!resServicios.ok) throw new Error(`Error al cargar servicios: ${resServicios.statusText}`);
-        const dataServicios: Servicio[] = await resServicios.json();
-
-        const resLocales = await fetch('http://localhost:3001/api/locales');
-        if (!resLocales.ok) throw new Error(`Error al cargar locales: ${resLocales.statusText}`);
-        const dataLocales: Local[] = await resLocales.json();
-        setLocales(dataLocales.map(l => ({ id: l.id, nombre: l.nombre })));
-
-        const mappedServicios = dataServicios.map(s => ({
-          ...s,
-          local_nombre: dataLocales.find(l => l.id === s.local_id)?.nombre || 'Desconocido'
-        }));
-        setServicios(mappedServicios);
-
-      } catch (err: any) {
-        console.error("Error fetching data:", err);
-        setErrorServicios(err.message || "Error al cargar los datos. Por favor, inténtalo de nuevo.");
-        toast.error("Error de carga", {
-            description: "No se pudieron obtener los datos de servicios o locales del servidor."
-        });
-      } finally {
-        setIsLoadingServicios(false);
-        setIsLoadingLocales(false);
-      }
-    };
-    fetchData();
-  }, [userRole, authLocalId]);
-
-
-  const filteredServicios = useMemo(() => {
-    return servicios.filter(servicio => {
-      const matchesSearch = servicio.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           servicio.descripcion.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesCategoria = filterCategoria === "todos" || servicio.categoria === filterCategoria;
-      const matchesLocalFilter = (userRole === 'admin' && filterLocalId === "todos") || 
-                                 (userRole === 'admin' && servicio.local_id.toString() === filterLocalId) ||
-                                 (userRole === 'encargado' && servicio.local_id.toString() === authLocalId);
-
-      return matchesSearch && matchesCategoria && matchesLocalFilter;
-    });
-  }, [servicios, searchTerm, filterCategoria, filterLocalId, userRole, authLocalId]);
-
-
-  const handleEdit = (servicio: Servicio) => {
-    toast.success(`Editando servicio: ${servicio.nombre}`);
-  };
-
-  const handleDelete = async (idToDelete: number) => {
+  const cargar = useCallback(async () => {
     try {
-      const response = await fetch(`http://localhost:3001/api/servicios/${idToDelete}`, {
-        method: 'DELETE',
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`Error al eliminar servicio: ${errorData.message || response.statusText}`);
-      }
-      setServicios(prevServicios => prevServicios.filter(s => s.id !== idToDelete));
-      toast.success("Servicio eliminado correctamente.");
-    } catch (err: any) {
-      console.error("Error al eliminar servicio:", err);
-      toast.error("Error al eliminar servicio", {
-        description: err.message || "No se pudo eliminar el servicio del servidor."
-      });
+      const res = await fetch(`${API_URL}/servicios`);
+      if (!res.ok) throw new Error();
+      setServicios(await res.json());
+    } catch {
+      toast.error("No se pudieron cargar los servicios.");
+    } finally {
+      setCargando(false);
     }
-  };
+  }, []);
+  useEffect(() => { cargar(); }, [cargar]);
 
-  const handlePriceUpdate = (servicio: Servicio) => {
-    toast.success(`Actualizando precio de ${servicio.nombre}`);
-  };
+  const visibles = useMemo(() => servicios.filter(s => filtroLocal === "todos" || s.local_id === filtroLocal), [servicios, filtroLocal]);
+  const porLocal = useMemo(() => {
+    const m = new Map<string, Servicio[]>();
+    for (const s of visibles) m.set(s.local_nombre, [...(m.get(s.local_nombre) ?? []), s]);
+    return [...m.entries()];
+  }, [visibles]);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { id, value } = e.target;
-    setNewServicioData(prevData => ({ ...prevData, [id]: value }));
-  };
-
-  const handleSaveServicio = async () => {
-    const { nombre, categoria, precio, duracion, descripcion, local_id } = newServicioData;
-
-    // VALIDACIÓN AJUSTADA: Si el usuario es encargado, usa su authLocalId para el local_id
-    let finalLocalId = local_id;
-    if (userRole === 'encargado' && authLocalId) {
-        finalLocalId = authLocalId;
-    }
-
-    if (!nombre || !categoria || !precio || !finalLocalId) { // Usa finalLocalId para la validación
-      toast.error("Nombre, categoría, precio y local son obligatorios.");
-      return;
-    }
-
+  const agregar = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!nombre.trim()) { toast.error("Escribe el nombre del servicio."); return; }
+    if (!(Number(precio) > 0)) { toast.error("Escribe el precio."); return; }
+    if (destinos.length === 0) { toast.error("Elige al menos un local."); return; }
+    setGuardando(true);
     try {
-      const servicioToSend = {
-        nombre,
-        categoria,
-        precio: parseFloat(precio as any) || 0,
-        duracion: duracion || null,
-        descripcion: descripcion || null,
-        local_id: parseInt(finalLocalId, 10) // Usa finalLocalId al enviar
-      };
-
-      const response = await fetch('http://localhost:3001/api/servicios', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(servicioToSend)
+      const res = await fetch(`${API_URL}/servicios`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nombre, precio: Number(precio), porcentaje_trabajador: pct, locales: destinos }),
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`Error al guardar servicio en el backend: ${errorData.message || response.statusText}`);
-      }
-
-      const savedServicio: Servicio = await response.json();
-      savedServicio.local_nombre = locales.find(l => l.id === savedServicio.local_id)?.nombre || 'Desconocido';
-      
-      setServicios(prevServicios => [...prevServicios, savedServicio]);
-      toast.success(`El servicio "${savedServicio.nombre}" ha sido agregado exitosamente.`);
-      setNewServicioData(getInitialNewServicioState(userRole, authLocalId)); // Resetear con el local_id correcto
-      setIsDialogOpen(false);
-
-    } catch (err: any) {
-      console.error("Error al guardar servicio:", err);
-      toast.error("Error al guardar servicio", {
-        description: err.message || "No se pudo guardar el servicio en el servidor."
-      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "No se pudo agregar.");
+      toast.success(`«${nombre.trim()}» agregado a ${data.length} local${data.length === 1 ? "" : "es"}.`);
+      setNombre(""); setPrecio(""); // el reparto y los locales se conservan para cargar varios seguidos
+      cargar();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo agregar.");
+    } finally {
+      setGuardando(false);
     }
   };
 
-  const getCategoriaColor = (categoria: string) => {
-    switch (categoria) {
-      case "Corte": return "bg-stylepro-blue-100 text-stylepro-blue-800";
-      case "Color": return "bg-stylepro-lavender-100 text-stylepro-lavender-800";
-      case "Barbería": return "bg-stylepro-gold-100 text-stylepro-gold-800";
-      case "Peinado": return "bg-green-100 text-green-800";
-      case "Tratamiento": return "bg-purple-100 text-purple-800";
-      case "Masaje": return "bg-pink-100 text-pink-800";
-      case "Facial": return "bg-blue-100 text-blue-800";
-      case "Uñas": return "bg-red-100 text-red-800";
-      default: return "bg-gray-100 text-gray-800";
+  const abrirEditar = (s: Servicio) => { setEditando(s); setENombre(s.nombre); setEPrecio(String(s.precio)); setEPct(s.porcentaje_trabajador); };
+
+  const guardarEdicion = async () => {
+    if (!editando) return;
+    try {
+      const res = await fetch(`${API_URL}/servicios/${editando.id}`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nombre: eNombre, precio: Number(ePrecio), porcentaje_trabajador: ePct }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "No se pudo guardar.");
+      toast.success("Servicio actualizado. Las ventas anteriores no cambian.");
+      setEditando(null);
+      cargar();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo guardar.");
     }
   };
 
+  const eliminar = async (s: Servicio) => {
+    if (!(await confirmar({ titulo: `¿Eliminar «${s.nombre}»?`, descripcion: `Se quita de ${s.local_nombre}. Las ventas ya registradas se conservan tal como se hicieron.`, textoConfirmar: "Sí, eliminar", destructivo: true }))) return;
+    try {
+      const res = await fetch(`${API_URL}/servicios/${s.id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "No se pudo eliminar.");
+      toast.success("Servicio eliminado.");
+      cargar();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo eliminar.");
+    }
+  };
 
-  if (isLoadingServicios || isLoadingLocales) {
-    return (
-      <div className="p-6">
-        <h2 className="text-3xl font-bold mb-6">Servicios</h2>
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {[...Array(4)].map((_, i) => (
-            <Card key={i}>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <Skeleton className="h-6 w-3/4" />
-                <Skeleton className="h-4 w-1/4" />
-              </CardHeader>
-              <CardContent>
-                <Skeleton className="h-4 w-full mb-2" />
-                <Skeleton className="h-4 w-2/3" />
-                <Separator className="my-4" />
-                <div className="flex justify-between items-center">
-                  <Skeleton className="h-8 w-1/3" />
-                  <Skeleton className="h-8 w-1/4" />
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (errorServicios) {
-    return <div className="p-6 text-red-500">{errorServicios}</div>;
-  }
+  const alternarDestino = (id: string) => setDestinos(d => (d.includes(id) ? d.filter(x => x !== id) : [...d, id]));
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-stylepro-lavender-50/30 to-stylepro-blue-50/20">
-      <div className="container mx-auto px-6 py-8 animate-fade-in">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground mb-2">Gestión de Servicios</h1>
-          <p className="text-muted-foreground">Administra el catálogo de servicios y sus precios</p>
-        </div>
+    <div className="p-4 md:p-6 space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">Servicios y precios</h1>
+        <p className="text-muted-foreground">Lo que se ofrece, cuánto cuesta y cómo se reparte entre el trabajador y el local.</p>
+      </div>
 
-        {/* Barra de herramientas */}
-        <div className="mb-6 flex flex-col md:flex-row gap-4 items-center justify-between">
-          <div className="flex gap-4 flex-1">
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-              <Input 
-                placeholder="Buscar servicios..." 
-                className="pl-10"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
+      <Card className="border border-border/60 shadow-sm">
+        <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-lg"><Plus className="h-5 w-5" aria-hidden /> Nuevo servicio</CardTitle></CardHeader>
+        <CardContent>
+          <form onSubmit={agregar} className="space-y-5">
+            <div className="grid gap-4 sm:grid-cols-[1fr_180px]">
+              <div>
+                <Label htmlFor="s-nombre">Nombre</Label>
+                <Input id="s-nombre" className="h-12 text-base" value={nombre} maxLength={255} onChange={e => setNombre(e.target.value)} placeholder="Ej.: Corte de pelo" />
+              </div>
+              <div>
+                <Label htmlFor="s-precio">Precio (S/)</Label>
+                <Input id="s-precio" className="h-12 text-base" type="number" min="0" step="0.5" inputMode="decimal" value={precio} onChange={e => setPrecio(e.target.value)} placeholder="25" />
+              </div>
             </div>
-            <Select value={filterCategoria} onValueChange={setFilterCategoria}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="Filtrar por categoría" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todas las categorías</SelectItem>
-                <SelectItem value="Corte">Corte</SelectItem>
-                <SelectItem value="Color">Color</SelectItem>
-                <SelectItem value="Barbería">Barbería</SelectItem>
-                <SelectItem value="Peinado">Peinado</SelectItem>
-                <SelectItem value="Tratamiento">Tratamiento</SelectItem>
-                <SelectItem value="Masaje">Masaje</SelectItem>
-                <SelectItem value="Facial">Facial</SelectItem>
-                <SelectItem value="Uñas">Uñas</SelectItem>
-              </SelectContent>
-            </Select>
-            {/* Selector de Local */}
-            {(userRole === 'admin' || !authLocalId) && ( // Solo visible para admin o si no hay localId
-                <Select value={filterLocalId} onValueChange={setFilterLocalId}>
-                <SelectTrigger className="w-48">
-                    <SelectValue placeholder="Filtrar por local" />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="todos">Todos los locales</SelectItem>
-                    {locales.map(local => (
-                        <SelectItem key={local.id} value={local.id.toString()}>{local.nombre}</SelectItem>
-                    ))}
-                </SelectContent>
-                </Select>
-            )}
-          </div>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-stylepro-lavender-600 hover:bg-stylepro-lavender-700 flex items-center gap-2">
-                <Plus className="h-4 w-4" />
-                Nuevo Servicio
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="pointer-events-auto overflow-y-auto max-h-[90vh]">
-              <DialogHeader>
-                <DialogTitle>Agregar Nuevo Servicio</DialogTitle>
-                <DialogDescription>
-                  Completa los detalles para añadir un nuevo servicio al catálogo.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="nombre" className="text-right">Nombre</Label>
-                  <Input id="nombre" value={newServicioData.nombre} onChange={handleInputChange} placeholder="Nombre del servicio..." className="col-span-3" />
-                </div>
-                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="categoria" className="text-right">Categoría</Label>
-                  <Select value={newServicioData.categoria} onValueChange={(value) => setNewServicioData(prevData => ({ ...prevData, categoria: value }))}>
-                    <SelectTrigger className="col-span-3">
-                      <SelectValue placeholder="Seleccionar categoría" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Corte">Corte</SelectItem>
-                      <SelectItem value="Color">Color</SelectItem>
-                      <SelectItem value="Barbería">Barbería</SelectItem>
-                      <SelectItem value="Peinado">Peinado</SelectItem>
-                      <SelectItem value="Tratamiento">Tratamiento</SelectItem>
-                      <SelectItem value="Masaje">Masaje</SelectItem>
-                      <SelectItem value="Facial">Facial</SelectItem>
-                      <SelectItem value="Uñas">Uñas</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="precio" className="text-right">Precio</Label>
-                  <Input id="precio" type="number" value={newServicioData.precio} onChange={handleInputChange} placeholder="0" className="col-span-3" />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="duracion" className="text-right">Duración</Label>
-                  <Input id="duracion" value={newServicioData.duracion} onChange={handleInputChange} placeholder="30 min" className="col-span-3" />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="descripcion" className="text-right">Descripción</Label>
-                  <Input id="descripcion" value={newServicioData.descripcion} onChange={handleInputChange} placeholder="Breve descripción del servicio..." className="col-span-3" />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="local_id" className="text-right">Local Asignado</Label>
-                  {userRole === 'admin' ? (
-                      <Select value={newServicioData.local_id} onValueChange={(value) => setNewServicioData(prevData => ({ ...prevData, local_id: value }))}>
-                          <SelectTrigger className="col-span-3">
-                              <SelectValue placeholder="Seleccionar local" />
-                          </SelectTrigger>
-                          <SelectContent>
-                              {locales.map(local => (
-                                  <SelectItem key={local.id} value={local.id.toString()}>{local.nombre}</SelectItem>
-                              ))}
-                          </SelectContent>
-                      </Select>
-                  ) : (
-                      <Input
-                          id="local_id_display"
-                          value={locales.find(l => l.id.toString() === authLocalId)?.nombre || 'Cargando...'}
-                          disabled
-                          className="col-span-3"
-                      />
-                  )}
+
+            <SelectorReparto valor={pct} onChange={setPct} />
+
+            {locales.length > 1 && (
+              <div>
+                <Label className="mb-1.5 block">¿En qué locales?</Label>
+                <div className="flex flex-wrap gap-2" role="group" aria-label="Locales donde se ofrece">
+                  {locales.map(l => (
+                    <button key={l.id} type="button" aria-pressed={destinos.includes(l.id)} onClick={() => alternarDestino(l.id)}
+                      className={`min-h-[44px] cursor-pointer rounded-xl border px-4 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${destinos.includes(l.id) ? "border-primary bg-primary text-primary-foreground" : "bg-white hover:bg-muted"}`}>
+                      {l.nombre}
+                    </button>
+                  ))}
                 </div>
               </div>
-              <Button onClick={handleSaveServicio} className="w-full">
-                Guardar Servicio
-              </Button>
-            </DialogContent>
-          </Dialog>
-        </div>
+            )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {filteredServicios.map((servicio, index) => (
-            <Card key={servicio.id} className="group overflow-hidden hover:shadow-lg hover-scale transition-all duration-300 border-0 shadow-md animate-fade-in" style={{ animationDelay: `${index * 100}ms` }}>
-              <CardHeader className="pb-3 relative">
-                <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Button 
-                    size="sm" 
-                    variant="secondary" 
-                    className="h-8 w-8 p-0"
-                    onClick={() => handleEdit(servicio)}
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <Button 
-                    size="sm" 
-                    variant="destructive"
-                    className="h-8 w-8 p-0"
-                    onClick={(e) => { e.stopPropagation(); handleDelete(servicio.id); }}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-                <div className="flex items-center justify-between mb-2">
-                  <Badge className={getCategoriaColor(servicio.categoria)}>
-                    {servicio.categoria}
-                  </Badge>
-                </div>
-                <CardTitle className="text-lg">{servicio.nombre}</CardTitle>
-                <p className="text-sm text-muted-foreground">{servicio.descripcion}</p>
-                <p className="text-xs text-muted-foreground mt-1">Local: {servicio.local_nombre}</p>
-              </CardHeader>
-              
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-2xl font-bold text-stylepro-gold-600 hover-scale cursor-pointer" onClick={() => handlePriceUpdate(servicio)}>S/{servicio.precio.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                  <div className="flex items-center gap-1 text-muted-foreground">
-                    <Clock className="h-4 w-4" />
-                    <span className="text-sm">{servicio.duracion}</span>
-                  </div>
-                </div>
-                
-                <div className="pt-2">
-                  <p className="text-sm font-medium mb-2">Detalles Adicionales:</p>
-                  <div className="flex flex-wrap gap-1">
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <Button type="submit" size="lg" disabled={guardando}>{guardando ? "Agregando..." : "Agregar servicio"}</Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      {locales.length > 1 && (
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Filtrar por local">
+          {[{ id: "todos", nombre: "Todos los locales" }, ...locales].map(l => (
+            <button key={l.id} type="button" aria-pressed={filtroLocal === l.id} onClick={() => setFiltroLocal(l.id)}
+              className={`min-h-[40px] cursor-pointer rounded-full border px-4 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${filtroLocal === l.id ? "border-primary bg-primary text-primary-foreground" : "bg-white hover:bg-muted"}`}>
+              {l.nombre}
+            </button>
           ))}
         </div>
-      </div>
+      )}
+
+      {!cargando && porLocal.length === 0 && (
+        <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed p-10 text-center text-muted-foreground">
+          <Scissors className="h-6 w-6" aria-hidden /> Aún no hay servicios. Agrega el primero arriba.
+        </div>
+      )}
+
+      {porLocal.map(([local, lista]) => (
+        <Card key={local} className="border border-border/60 shadow-sm">
+          <CardHeader className="pb-2"><CardTitle className="text-base">{local} <Badge variant="secondary" className="ml-2">{lista.length}</Badge></CardTitle></CardHeader>
+          <CardContent>
+            <ul className="divide-y">
+              {lista.map(s => (
+                <li key={s.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                  <div className="min-w-0">
+                    <p className="font-medium">{s.nombre}</p>
+                    <p className="text-sm text-muted-foreground">{textoReparto(s.porcentaje_trabajador)}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="mr-2 text-lg font-bold tabular-nums">{formatMoney(s.precio)}</span>
+                    <Button variant="outline" className="min-h-[44px]" onClick={() => abrirEditar(s)} aria-label={`Editar ${s.nombre}`}><Pencil className="mr-1.5 h-4 w-4" aria-hidden /> Editar</Button>
+                    <Button variant="outline" className="min-h-[44px] border-red-200 bg-red-50 text-red-700 hover:bg-red-100 hover:text-red-800" onClick={() => eliminar(s)} aria-label={`Eliminar ${s.nombre}`}><Trash2 className="mr-1.5 h-4 w-4" aria-hidden /> Eliminar</Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      ))}
+
+      <Dialog open={!!editando} onOpenChange={o => !o && setEditando(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Editar servicio</DialogTitle>
+            <DialogDescription>{editando?.local_nombre}. Los cambios valen desde ahora; las ventas ya registradas conservan su precio y reparto.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4">
+            <div className="grid gap-4 sm:grid-cols-[1fr_140px]">
+              <div><Label htmlFor="e-nombre">Nombre</Label><Input id="e-nombre" value={eNombre} maxLength={255} onChange={e => setENombre(e.target.value)} /></div>
+              <div><Label htmlFor="e-precio">Precio (S/)</Label><Input id="e-precio" type="number" min="0" step="0.5" inputMode="decimal" value={ePrecio} onChange={e => setEPrecio(e.target.value)} /></div>
+            </div>
+            <SelectorReparto valor={ePct} onChange={setEPct} />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditando(null)}>Cancelar</Button>
+            <Button onClick={guardarEdicion}>Guardar cambios</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {dialogo}
     </div>
   );
 };

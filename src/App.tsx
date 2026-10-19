@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { LoginPage } from "./pages/auth/LoginPage";
 import { MainAppLayout } from "./components/MainAppLayout";
 import { AuthProvider, useAuth } from "./hooks/useAuth"; // Importa AuthProvider y useAuth
+import { BrandProvider } from "./hooks/useBrand";
 
 const queryClient = new QueryClient();
 
@@ -23,6 +24,7 @@ const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
+    <BrandProvider>
     <TooltipProvider>
       <Toaster />
       <Sonner richColors position="top-right" />
@@ -46,6 +48,7 @@ const App = () => (
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
+    </BrandProvider>
   </QueryClientProvider>
 );
 
